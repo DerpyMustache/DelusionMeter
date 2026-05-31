@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from pymongo import MongoClient
 import os
@@ -35,7 +35,24 @@ allowed_origins = {
     "http://127.0.0.1:5173",
     *env_origins,
 }
-CORS(app, resources={r"/profiles": {"origins": list(allowed_origins)}})
+
+cors_origins = "*" if "*" in allowed_origins else sorted(allowed_origins)
+CORS(app, resources={r"/*": {"origins": cors_origins}})
+
+
+@app.after_request
+def ensure_cors_headers(response):
+    # Explicit fallback for edge cases where proxies/CDNs mask default CORS behavior.
+    request_origin = request.headers.get("Origin")
+    if cors_origins == "*":
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    elif request_origin and request_origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = request_origin
+        response.headers["Vary"] = "Origin"
+
+    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return response
 
 def get_db_client():
     mongo_uri = os.environ.get("MONGODB_URI")
@@ -46,6 +63,20 @@ def get_db_client():
         )
     print("Connecting to MongoDB")
     return MongoClient(mongo_uri)
+
+
+@app.route('/')
+def index():
+    return jsonify({
+        "status": "ok",
+        "service": "delusionmeter-api",
+        "endpoints": ["/profiles", "/health"],
+    })
+
+
+@app.route('/health')
+def health():
+    return jsonify({"status": "ok"})
 
 @app.route('/profiles')
 def get_profiles():
