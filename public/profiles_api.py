@@ -35,7 +35,9 @@ allowed_origins = {
     "http://127.0.0.1:5173",
     *env_origins,
 }
-CORS(app, resources={r"/profiles": {"origins": list(allowed_origins)}})
+
+cors_origins = "*" if "*" in allowed_origins else list(allowed_origins)
+CORS(app, resources={r"/profiles": {"origins": cors_origins}})
 
 def get_db_client():
     mongo_uri = os.environ.get("MONGODB_URI")
@@ -46,6 +48,20 @@ def get_db_client():
         )
     print("Connecting to MongoDB")
     return MongoClient(mongo_uri)
+
+
+@app.route('/')
+def index():
+    return jsonify({
+        "status": "ok",
+        "service": "delusionmeter-api",
+        "endpoints": ["/profiles", "/health"],
+    })
+
+
+@app.route('/health')
+def health():
+    return jsonify({"status": "ok"})
 
 @app.route('/profiles')
 def get_profiles():
