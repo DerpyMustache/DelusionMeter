@@ -54,7 +54,12 @@ def ensure_cors_headers(response):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
 
+_mongo_client = None
+
 def get_db_client():
+    global _mongo_client
+    if _mongo_client is not None:
+        return _mongo_client
     mongo_uri = os.environ.get("MONGODB_URI")
     if not mongo_uri:
         raise RuntimeError(
@@ -62,7 +67,26 @@ def get_db_client():
             "Set it in your shell or profiles-dashboard/.env."
         )
     print("Connecting to MongoDB")
-    return MongoClient(mongo_uri)
+    _mongo_client = MongoClient(mongo_uri)
+    return _mongo_client
+
+
+_profiles_cache = None
+
+def get_profiles_cached():
+    global _profiles_cache
+    if _profiles_cache is not None:
+        print("Serving profiles from cache")
+        return _profiles_cache
+    client = get_db_client()
+    db_name = os.environ.get("MONGODB_DB", "Profiles")
+    collection_name = os.environ.get("MONGODB_COLLECTION", "Profiles")
+    db = client[db_name]
+    collection = db[collection_name]
+    print("Fetching profiles from MongoDB")
+    _profiles_cache = list(collection.find({}, {'_id': False}))
+    print(f"Cached {len(_profiles_cache)} profiles")
+    return _profiles_cache
 
 
 @app.route('/')
@@ -80,12 +104,7 @@ def health():
 
 @app.route('/profiles')
 def get_profiles():
-    client = get_db_client()
-    db_name = os.environ.get("MONGODB_DB", "Profiles")
-    collection_name = os.environ.get("MONGODB_COLLECTION", "Profiles")
-    db = client[db_name]
-    collection = db[collection_name]
-    docs = list(collection.find({}, {'_id': False}))
+    docs = get_profiles_cached()
     return jsonify(docs)
 
 if __name__ == '__main__':
