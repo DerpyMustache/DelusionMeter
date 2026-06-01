@@ -130,7 +130,7 @@ export default function ChartCard({ attribute, title, answeredCount, labels, val
                   ? ["Man", "Woman", "Non-binary/Gender Nonconforming"].map(val => (
                       <option key={val} value={val}>{val}</option>
                     ))
-                  : attribute === "age"
+                  : attribute === "age" || attribute === "height"
                     ? labels.map(val => (
                         <option key={val} value={val}>{val}</option>
                       ))

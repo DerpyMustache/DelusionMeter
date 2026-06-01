@@ -22,6 +22,100 @@ import VALUE_MAPS from "./lib/valueMaps.js";
 import INITIAL_CHARTS from "./lib/initialCharts.js";
 
 const FIXED_HEADERS = Object.values(ATTRIBUTE_MAP);
+const SPLASH_SEEN_KEY = "delusionmeter:splashSeen:v1";
+
+function bucketAgeForFilter(ageValue) {
+  const n = parseInt(String(ageValue).trim(), 10);
+  if (!Number.isFinite(n)) return null;
+  if (n < 21) return "<21";
+  const start = 21 + Math.floor((n - 21) / 5) * 5;
+  return `${start}-${start + 4}`;
+}
+
+function matchesAgeFilter(ageValue, selectedAgeLabel) {
+  const n = parseInt(String(ageValue).trim(), 10);
+  if (!Number.isFinite(n)) return false;
+
+  const label = String(selectedAgeLabel).trim();
+  const rangeMatch = label.match(/^(\d{1,3})-(\d{1,3})$/);
+  if (rangeMatch) {
+    const low = parseInt(rangeMatch[1], 10);
+    const high = parseInt(rangeMatch[2], 10);
+    return n >= low && n <= high;
+  }
+
+  const ltMatch = label.match(/^<(\d{1,3})$/);
+  if (ltMatch) return n < parseInt(ltMatch[1], 10);
+
+  const gtMatch = label.match(/^>(\d{1,3})$/);
+  if (gtMatch) return n > parseInt(gtMatch[1], 10);
+
+  const exact = parseInt(label, 10);
+  if (Number.isFinite(exact)) return n === exact;
+
+  return bucketAgeForFilter(ageValue) === label;
+}
+
+function parseHeightToInches(value) {
+  const v = String(value).toLowerCase();
+
+  const feetInches = v.match(/(\d+)\s*'\s*(\d+)?/);
+  if (feetInches) {
+    const feet = parseInt(feetInches[1], 10);
+    const inches = parseInt(feetInches[2] || 0, 10);
+    return feet * 12 + inches;
+  }
+
+  const ft = v.match(/(\d+)\s*ft/);
+  const inch = v.match(/(\d+)\s*in/);
+  if (ft) {
+    const feet = parseInt(ft[1], 10);
+    const inches = inch ? parseInt(inch[1], 10) : 0;
+    return feet * 12 + inches;
+  }
+
+  const cm = v.match(/(\d+)\s*cm/);
+  if (cm) return parseInt(cm[1], 10) / 2.54;
+
+  return null;
+}
+
+function parseFeetInches(text) {
+  const m = String(text).trim().match(/^(\d+)\s*'\s*(\d+)"$/);
+  if (!m) return null;
+  return parseInt(m[1], 10) * 12 + parseInt(m[2], 10);
+}
+
+function matchesHeightFilter(heightValue, selectedHeightLabel) {
+  const inches = parseHeightToInches(heightValue);
+  if (!Number.isFinite(inches)) return false;
+
+  const label = String(selectedHeightLabel).trim();
+  const rangeMatch = label.match(/^(\d+\s*'\s*\d+")-(\d+\s*'\s*\d+")$/);
+  if (rangeMatch) {
+    const low = parseFeetInches(rangeMatch[1]);
+    const high = parseFeetInches(rangeMatch[2]);
+    if (!Number.isFinite(low) || !Number.isFinite(high)) return false;
+    return inches >= low && inches <= high;
+  }
+
+  const ltMatch = label.match(/^<(\d+\s*'\s*\d+")$/);
+  if (ltMatch) {
+    const bound = parseFeetInches(ltMatch[1]);
+    return Number.isFinite(bound) ? inches < bound : false;
+  }
+
+  const gtMatch = label.match(/^>(\d+\s*'\s*\d+")$/);
+  if (gtMatch) {
+    const bound = parseFeetInches(gtMatch[1]);
+    return Number.isFinite(bound) ? inches > bound : false;
+  }
+
+  const exact = parseFeetInches(label);
+  if (Number.isFinite(exact)) return Math.round(inches) === exact;
+
+  return false;
+}
 
 function decodeProfile(profile) {
   const decoded = {};
@@ -44,9 +138,24 @@ export default function App() {
   const [rows, setRows] = useState(null);
   const [headers, setHeaders] = useState(null);
   const [error, setError] = useState(null);
+  const [showSplash, setShowSplash] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem(SPLASH_SEEN_KEY) !== "1";
+  });
   const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
   // filter: { [attribute]: value }
   const [filter, setFilter] = useState({});
+
+  useEffect(() => {
+    if (!showSplash) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setShowSplash(false);
+      window.sessionStorage.setItem(SPLASH_SEEN_KEY, "1");
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [showSplash]);
 
   useEffect(() => {
     fetch(apiBaseUrl + "/profiles")
@@ -75,7 +184,17 @@ export default function App() {
     // Use centralized normalization helpers from transform.js
     return rows.filter((row) =>
       Object.entries(filter).every(([attr, val]) => {
-        return val === undefined || val === null || val === "" ? true : row[attr] === val;
+        if (val === undefined || val === null || val === "") return true;
+
+        if (attr === "age") {
+          return matchesAgeFilter(row[attr], val);
+        }
+
+        if (attr === "height") {
+          return matchesHeightFilter(row[attr], val);
+        }
+
+        return row[attr] === val;
       })
     );
   }, [rows, filter]);
@@ -108,7 +227,7 @@ export default function App() {
     );
   }
 
-  if ((!rows || !headers) && INITIAL_CHARTS.length === 0) {
+  if (showSplash) {
     return (
       <div className="loadingLoveScreen">
         <div className="loadingLoveContent">
@@ -142,8 +261,12 @@ export default function App() {
         const v = r[minAttr];
         return v !== undefined && v !== null && String(v).trim() !== "";
       }).length;
-      delusionPct = 100 * (1 - filteredAnswered / minAnswered);
-      delusionPct = delusionPct.toFixed(2);
+      const rawDelusionPct = 100 * (1 - filteredAnswered / minAnswered);
+      if (filteredRows.length === 0) {
+        delusionPct = 100;
+      } else {
+        delusionPct = Math.min(99.9, Math.max(0, rawDelusionPct));
+      }
     } else {
       delusionPct = 0;
     }
@@ -153,7 +276,7 @@ export default function App() {
 
   return (
     <div className="container">
-      <div className="huge-title">How delusional are you? *</div>
+      <div className="huge-title">How delusional are you?</div>
       {rows && headers ? (
         <FilterPanel
           rows={rows}
@@ -215,7 +338,7 @@ export default function App() {
             textShadow: "-1px -1px 0 #222, 1px -1px 0 #222, -1px 1px 0 #222, 1px 1px 0 #222, 0 1px 4px #0008",
             width: "100%",
             textAlign: "center"
-          }}>{delusionPct}%</div>
+          }}>{delusionPct.toFixed(1)}%</div>
         </div>
       </div>
 
@@ -251,12 +374,6 @@ export default function App() {
           ))}
         </div>
       )}
-
-      <div className="smallNote">
-        <div style={{ marginTop: "2em", color: "#9ca3af", fontSize: "13px" }}>
-          * Compared to a sample size of ~10000 Bumble profiles within a 100 miles radius of Seattle.
-        </div>
-      </div>
     </div>
   );
 }

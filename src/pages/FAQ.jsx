@@ -16,10 +16,6 @@ const faqs = [
   {
     q: "Why are some of the word clouds so small?",
     a: "This was pretty confusing to me as well at first, but after checking the raw data, these prompts somehow only have a few (usually less than 10) responses out of the 500000+ profiles. Talk about unpopular."
-  },
-   {
-    q: "Sexuality??",
-    a: "This was pretty confusing to me as well at first, but after checking the raw data, these prompts somehow only have a few (usually less than 10) responses out of the 500000+ profiles. Talk about unpopular."
   }
 ];
 

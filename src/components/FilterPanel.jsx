@@ -1,6 +1,44 @@
 
 import { prettifyAttributeName } from "../lib/transform.js";
 
+function religionToNoun(value) {
+  const normalized = String(value).trim().toLowerCase();
+  switch (normalized) {
+    case "agnostic":
+      return "agnostics";
+    case "atheist":
+      return "atheists";
+    case "buddhist":
+      return "buddhists";
+    case "catholic":
+      return "catholics";
+    case "christian":
+      return "christians";
+    case "hindu":
+      return "hindus";
+    case "jain":
+      return "jains";
+    case "jewish":
+      return "jewish people";
+    case "latter-day saint":
+      return "latter-day saints";
+    case "mormon":
+      return "mormons";
+    case "muslim":
+      return "muslims";
+    case "other":
+      return "people of other religions";
+    case "sikh":
+      return "sikhs";
+    case "spiritual":
+      return "spiritual people";
+    case "zoroastrian":
+      return "zoroastrians";
+    default:
+      return `${normalized} people`;
+  }
+}
+
 
 export default function FilterPanel({ rows, headers, filter, onFilterChange, filteredRows }) {
   if (!rows || !headers) return null;
@@ -20,27 +58,28 @@ export default function FilterPanel({ rows, headers, filter, onFilterChange, fil
   let adjectives = [];
   let noun = null;
   let verbPhrases = [];
-  let hasAge = false;
-  let hasGender = false;
+  let ageSelected = false;
+  let ageValueText = "";
+  let ageAdjectiveIndex = -1;
 
   for (const [attr, val] of sorted) {
     if (attr === "politics") {
       adjectives.push(val.toLowerCase());
     } else if (attr === "age") {
-      hasAge = true;
-      const match = val.match(/^(\d{1,3})$/);
-      if (match) {
-        // If gender is also present, use 'year old' (no s)
-        if (filter.gender) {
-          adjectives.push(`${val} year old`);
-        } else {
-          adjectives.push(`${val} year olds`);
-        }
+      const ageValue = String(val).trim();
+      const isAgeRange = /^\d{1,3}-\d{1,3}$/.test(ageValue);
+      const isSingleAge = /^\d{1,3}$/.test(ageValue);
+      const isAgeBound = /^<\d{1,3}$|^>\d{1,3}$/.test(ageValue);
+
+      if (isSingleAge || isAgeRange || isAgeBound) {
+        ageSelected = true;
+        ageValueText = ageValue;
+        adjectives.push(`${ageValue} year old`);
+        ageAdjectiveIndex = adjectives.length - 1;
       } else {
-        adjectives.push(`${val}`);
+        adjectives.push(ageValue);
       }
     } else if (attr === "gender") {
-      hasGender = true;
       const lowerVal = val.toLowerCase();
       if (["man", "woman", "other"].includes(lowerVal)) {
         if (lowerVal === "man") {
@@ -89,7 +128,20 @@ export default function FilterPanel({ rows, headers, filter, onFilterChange, fil
         verbPhrases.push(`exercise ${exerciseText}`);
       }
     } else if (attr === "education_level") {
-      adjectives.push(`${val}`);
+      const normalizedEducation = String(val).trim().toLowerCase();
+      if (normalizedEducation === "high school") {
+        adjectives.push("high school educated");
+      } else if (normalizedEducation === "undergraduate degree" || normalizedEducation === "college") {
+        verbPhrases.push("have college degrees");
+      } else if (normalizedEducation === "graduate degree") {
+        verbPhrases.push("have graduate degrees");
+      } else if (normalizedEducation === "trade/tech school") {
+        verbPhrases.push("have trade or tech school backgrounds");
+      } else if (normalizedEducation === "in grad school") {
+        verbPhrases.push("are in grad school");
+      } else {
+        adjectives.push(`${val}`);
+      }
     } else if (attr === "looking_for") {
       let lookingText = val.toLowerCase();
       if (lookingText === "relationship") {
@@ -105,34 +157,41 @@ export default function FilterPanel({ rows, headers, filter, onFilterChange, fil
       }
     } else if (attr === "kids") {
       let kidsText = null;
-      switch (val) {
-        case "Don’t want":
+      const normalizedKids = String(val).trim().toLowerCase().replace(/’/g, "'");
+      switch (normalizedKids) {
+        case "don't want":
           kidsText = "do not want kids";
           break;
-        case "Have and don’t want more":
+        case "have and don't want more":
           kidsText = "have kids and do not want more";
           break;
-        case "Have and want more":
+        case "have and want more":
           kidsText = "have kids and want more";
           break;
-        case "Have kids":
+        case "have kids":
+        case "has kids":
           kidsText = "have kids";
           break;
-        case "Not sure yet":
+        case "not sure yet":
           kidsText = "are not sure about having kids";
           break;
-        case "Open to kids":
+        case "open to kids":
           kidsText = "are open to having kids";
           break;
-        case "Want someday":
+        case "want someday":
           kidsText = "want to have kids someday";
           break;
         default:
-          kidsText = `kids: ${val}`;
+          kidsText = `have kids preference: ${val}`;
       }
       verbPhrases.push(kidsText);
     } else if (attr === "religion") {
-      adjectives.push(val);
+      const religionNoun = religionToNoun(val);
+      if (!noun) {
+        noun = religionNoun;
+      } else {
+        adjectives.push(String(val).trim().toLowerCase());
+      }
     } else if (attr === "occupation") {
       if (val.trim().toLowerCase() === "unemployed") {
         verbPhrases.push("are unemployed");
@@ -152,14 +211,19 @@ export default function FilterPanel({ rows, headers, filter, onFilterChange, fil
     sentence = `Showing all ${filteredCount} profiles`;
   } else {
     sentence = `Showing ${filteredCount} profiles from`;
+    if (!noun) {
+      if (ageSelected && ageAdjectiveIndex !== -1) {
+        adjectives[ageAdjectiveIndex] = ageValueText;
+        noun = "year olds";
+      } else {
+        noun = "people";
+      }
+    }
+
     if (adjectives.length > 0) {
       sentence += " " + adjectives.join(" ");
     }
-    if (noun) {
-      sentence += " " + noun;
-    } else if (!hasAge && !hasGender) {
-      sentence += " people";
-    }
+    sentence += " " + noun;
     if (verbPhrases.length > 0) {
       sentence += " who " + verbPhrases.join(" and ");
     }
