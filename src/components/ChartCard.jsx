@@ -43,7 +43,7 @@ const centerTextPlugin = {
   },
 };
 
-export default function ChartCard({ attribute, title, answeredCount, labels, values, filter, onFilterChange, rows }) {
+export default function ChartCard({ attribute, title, answeredCount, labels, values, filter, onFilterChange, rows, canFilter = true }) {
   const [showDropdown, setShowDropdown] = useState(false);
   // Replace 'Other' with 'Non-binary/Gender Nonconforming' for gender labels
   const displayLabels = attribute === "gender"
@@ -90,7 +90,7 @@ export default function ChartCard({ attribute, title, answeredCount, labels, val
       <div className="cardHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative" }}>
         <h2>{title}</h2>
         <div style={{ position: "relative" }}>
-          {!filter[attribute] && (
+          {!filter[attribute] && canFilter && (
             <button
               style={{ fontSize: "0.9em", background: "#222", color: "#a7f3d0", border: "none", borderRadius: 4, padding: "0.3em 0.7em", cursor: "pointer" }}
               onClick={() => setShowDropdown((v) => !v)}

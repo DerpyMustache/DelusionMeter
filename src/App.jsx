@@ -19,6 +19,7 @@ const ATTRIBUTE_MAP = {
 };
 
 import VALUE_MAPS from "./lib/valueMaps.js";
+import INITIAL_CHARTS from "./lib/initialCharts.js";
 
 const FIXED_HEADERS = Object.values(ATTRIBUTE_MAP);
 
@@ -79,15 +80,24 @@ export default function App() {
     );
   }, [rows, filter]);
 
-  const charts = useMemo(() => {
+  const allCharts = useMemo(() => {
     if (!filteredRows || !headers) return [];
-    const allCharts = buildAttributeCharts(filteredRows, headers);
+    return buildAttributeCharts(filteredRows, headers);
+  }, [filteredRows, headers]);
+
+  const charts = useMemo(() => {
+    if (!rows && Object.keys(filter).length === 0) {
+      return INITIAL_CHARTS;
+    }
+
+    if (!allCharts.length) return [];
+
     // Remove charts for filtered attributes
     if (filter && Object.keys(filter).length > 0) {
       return allCharts.filter((c) => !filter[c.attribute]);
     }
     return allCharts;
-  }, [filteredRows, headers, filter]);
+  }, [allCharts, filter, rows]);
 
   if (error) {
     return (
@@ -98,7 +108,7 @@ export default function App() {
     );
   }
 
-  if (!rows || !headers) {
+  if ((!rows || !headers) && INITIAL_CHARTS.length === 0) {
     return (
       <div className="loadingLoveScreen">
         <div className="loadingLoveContent">
@@ -144,13 +154,19 @@ export default function App() {
   return (
     <div className="container">
       <div className="huge-title">How delusional are you? *</div>
-      <FilterPanel
-        rows={rows}
-        headers={headers}
-        filter={filter}
-        onFilterChange={setFilter}
-        filteredRows={filteredRows}
-      />
+      {rows && headers ? (
+        <FilterPanel
+          rows={rows}
+          headers={headers}
+          filter={filter}
+          onFilterChange={setFilter}
+          filteredRows={filteredRows}
+        />
+      ) : (
+        <div style={{ marginBottom: "1.5rem", color: "#9ca3af", textAlign: "center" }}>
+          Loading filter options...
+        </div>
+      )}
 
       {/* Delusion Meter Progress Bar */}
       <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", margin: "16px 0 24px 0", padding: "0 0 8px 0" }}>
@@ -229,7 +245,8 @@ export default function App() {
               values={c.values}
               filter={filter}
               onFilterChange={setFilter}
-              rows={rows}
+              rows={rows || []}
+              canFilter={Boolean(rows)}
             />
           ))}
         </div>
