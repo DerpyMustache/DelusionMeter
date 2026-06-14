@@ -161,3 +161,153 @@ h1 {
     transform: rotate(-45deg) scale(0.94);
   }
 }
+
+.promptsPage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.promptsTitle {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.faqPage {
+  max-width: 1400px;
+}
+
+.faqTitle {
+  font-size: 2.2em;
+  margin-bottom: 32px;
+}
+
+.faqGrid {
+  display: flex;
+  flex-direction: row;
+  gap: 32px;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+}
+
+.faqCard {
+  background: #181a1b;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px #0006;
+  padding: 32px 36px;
+  min-width: 320px;
+  max-width: 420px;
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.faqQuestion {
+  font-weight: 700;
+  font-size: 1.35em;
+  margin-bottom: 12px;
+}
+
+.faqAnswer {
+  font-size: 1.15em;
+  color: #d1d5db;
+}
+
+.wordCloudViewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: min(100%, 1400px);
+}
+
+.wordCloudTitle {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.wordCloudSelect {
+  margin-bottom: 24px;
+  width: min(100%, 560px);
+  min-width: 0;
+  text-align: center;
+  font-size: 1.1em;
+  padding: 0.5em;
+  border-radius: 6px;
+}
+
+.wordCloudImageWrap {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.wordCloudImage {
+  width: 1350px;
+  height: 675px;
+  max-width: 100%;
+  border: 1px solid #333;
+  border-radius: 8px;
+  display: block;
+  margin: 0 auto;
+}
+
+@media (max-width: 900px) {
+  .promptsPage,
+  .faqPage {
+    padding: 16px;
+  }
+
+  .faqGrid {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .faqCard {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    padding: 18px 16px;
+  }
+
+  .faqTitle {
+    font-size: 1.8em;
+    margin-bottom: 18px;
+  }
+
+  .faqQuestion {
+    font-size: 1.06em;
+    margin-bottom: 8px;
+  }
+
+  .faqAnswer {
+    font-size: 0.96em;
+    line-height: 1.45;
+  }
+
+  .promptsTitle {
+    margin-bottom: 14px;
+  }
+
+  .wordCloudTitle {
+    font-size: 1.08em;
+    margin-bottom: 10px;
+  }
+
+  .wordCloudSelect {
+    font-size: 1em;
+    margin-bottom: 14px;
+  }
+
+  .wordCloudImage {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 2 / 1;
+  }
+}

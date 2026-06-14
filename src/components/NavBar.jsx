@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 export default function NavBar() {
   const location = useLocation();
   const navItems = [
-    { path: "/", label: "Profile Data" },
+    { path: "/", label: "Delusion Meter" },
     { path: "/prompts", label: "Prompt Data" },
     { path: "/faq", label: "FAQ" },
   ];

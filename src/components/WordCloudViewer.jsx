@@ -11,12 +11,12 @@ export default function WordCloudViewer() {
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-      <h2 style={{ textAlign: "center", marginBottom: 16 }}>Prompt Word Clouds</h2>
+    <div className="wordCloudViewer">
+      <h2 className="wordCloudTitle">Prompt Word Clouds</h2>
       <select
         value={selected}
         onChange={e => setSelected(e.target.value)}
-        style={{ marginBottom: 24, minWidth: 320, textAlign: "center", fontSize: "1.1em", padding: "0.5em", borderRadius: 6 }}
+        className="wordCloudSelect"
       >
         <option value="">Select a prompt...</option>
         {Object.keys(prompts).map(prompt => (
@@ -24,11 +24,11 @@ export default function WordCloudViewer() {
         ))}
       </select>
       {selected && (
-        <div style={{ marginTop: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <div className="wordCloudImageWrap">
           <img
             src={`/${prompts[selected]}`}
             alt={`Word cloud for ${selected}`}
-            style={{ width: "1350px", height: "675px", maxWidth: "100%", border: "1px solid #333", borderRadius: 8, display: "block", margin: "0 auto" }}
+            className="wordCloudImage"
           />
         </div>
       )}

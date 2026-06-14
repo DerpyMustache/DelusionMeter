@@ -7,7 +7,6 @@ import {
 } from "chart.js";
 import { colorForLabel } from "../lib/colors.js";
 import { useState } from "react";
-import { getAttributeValues } from "../lib/transform.js";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -43,8 +42,10 @@ const centerTextPlugin = {
   },
 };
 
-export default function ChartCard({ attribute, title, answeredCount, labels, values, filter, onFilterChange, rows, canFilter = true }) {
+export default function ChartCard({ attribute, title, answeredCount, labels, values, filter, onFilterChange, canFilter = true }) {
   const [showDropdown, setShowDropdown] = useState(false);
+  const [pendingValues, setPendingValues] = useState([]);
+  const [selectionError, setSelectionError] = useState("");
   // Replace 'Other' with 'Non-binary/Gender Nonconforming' for gender labels
   const displayLabels = attribute === "gender"
     ? labels.map(l => l === "Other" ? "Non-binary/Gender Nonconforming" : l)
@@ -85,59 +86,139 @@ export default function ChartCard({ attribute, title, answeredCount, labels, val
     },
   };
 
+  const selectedValues = Array.isArray(filter[attribute])
+    ? filter[attribute]
+    : filter[attribute]
+      ? [filter[attribute]]
+      : [];
+
+  const filterOptions = attribute === "gender"
+    ? ["Man", "Woman", "Non-binary/Gender Nonconforming"]
+    : labels;
+
+  const togglePendingValue = (value) => {
+    setSelectionError("");
+    setPendingValues((current) =>
+      current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value]
+    );
+  };
+
+  const applyPendingSelection = () => {
+    const nextValues = [...pendingValues];
+    if (nextValues.length === filterOptions.length) {
+      setSelectionError("Try removing at least one option.");
+      return;
+    }
+
+    const currentSorted = [...selectedValues].sort();
+    const nextSorted = [...nextValues].sort();
+    const unchanged =
+      currentSorted.length === nextSorted.length &&
+      currentSorted.every((v, i) => v === nextSorted[i]);
+
+    setShowDropdown(false);
+    if (unchanged) return;
+
+    const nextFilter = { ...filter };
+    if (nextValues.length === 0) {
+      delete nextFilter[attribute];
+    } else {
+      nextFilter[attribute] = nextValues;
+    }
+    onFilterChange(nextFilter);
+  };
+
   return (
     <div className="card" style={{ position: "relative" }}>
       <div className="cardHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative" }}>
         <h2>{title}</h2>
         <div style={{ position: "relative" }}>
-          {!filter[attribute] && canFilter && (
+          {canFilter && (
             <button
               style={{ fontSize: "0.9em", background: "#222", color: "#a7f3d0", border: "none", borderRadius: 4, padding: "0.3em 0.7em", cursor: "pointer" }}
-              onClick={() => setShowDropdown((v) => !v)}
+              onClick={() => {
+                setPendingValues(selectedValues);
+                setSelectionError("");
+                setShowDropdown((v) => !v);
+              }}
             >
-              Filter by
+              {selectedValues.length > 0 ? `Edit filter (${selectedValues.length})` : "Filter by"}
             </button>
           )}
-          {showDropdown && !filter[attribute] && (
-            <div style={{ position: "absolute", top: "110%", right: 0, zIndex: 10, background: "#222", borderRadius: 4, boxShadow: "0 2px 12px #0008", padding: "0.3em 0.7em" }}>
-              <select
-                autoFocus
-                size={attribute === "gender" ? 4 : Math.max(2, Math.min(6, getAttributeValues(rows, attribute).length + 1))}
-                style={{
-                  background: "#222",
-                  color: "#a7f3d0",
-                  border: "none",
-                  fontWeight: 600,
-                  fontSize: "0.9em",
-                  borderRadius: 4,
-                  cursor: "pointer",
-                  minWidth: 120,
-                  outline: "none"
-                }}
-                onBlur={() => setShowDropdown(false)}
-                onChange={e => {
-                  if (e.target.value) {
-                    onFilterChange({ ...filter, [attribute]: e.target.value });
+          {showDropdown && (
+            <div style={{ position: "absolute", top: "110%", right: 0, zIndex: 10, background: "#222", borderRadius: 4, boxShadow: "0 2px 12px #0008", padding: "0.3em 0.7em", width: "fit-content" }}>
+              <div style={{ width: "max-content", minWidth: 120, maxWidth: 260, maxHeight: 240, overflowY: "auto", padding: "0.2rem 0 0 0" }}>
+                {filterOptions.map((val) => {
+                  const checked = pendingValues.includes(val);
+                  return (
+                    <label
+                      key={val}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.45rem",
+                        padding: "0.2rem 0.1rem",
+                        color: checked ? "#a7f3d0" : "#e5e7eb",
+                        fontSize: "0.9em",
+                        whiteSpace: "nowrap",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => togglePendingValue(val)}
+                      />
+                      <span>{val}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              {selectionError && (
+                <div style={{ color: "#fca5a5", fontSize: "0.78em", marginTop: 6, maxWidth: 220, lineHeight: 1.3 }}>
+                  {selectionError}
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "center", marginTop: selectionError ? 8 : 4, paddingTop: 2, gap: 10 }}>
+                <button
+                  style={{
+                    fontSize: "0.8em",
+                    background: "transparent",
+                    color: "#d1d5db",
+                    border: "1px solid #4b5563",
+                    borderRadius: 4,
+                    padding: "0.25em 0.7em",
+                    minWidth: 68,
+                    cursor: "pointer",
+                    textAlign: "center"
+                  }}
+                  onClick={() => {
+                    setPendingValues(selectedValues);
+                    setSelectionError("");
                     setShowDropdown(false);
-                  }
-                }}
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  Select value…
-                </option>
-                {attribute === "gender"
-                  ? ["Man", "Woman", "Non-binary/Gender Nonconforming"].map(val => (
-                      <option key={val} value={val}>{val}</option>
-                    ))
-                  : attribute === "age" || attribute === "height"
-                    ? labels.map(val => (
-                        <option key={val} value={val}>{val}</option>
-                      ))
-                    : getAttributeValues(rows, attribute).map(val => (
-                        <option key={val} value={val}>{val}</option>
-                      ))}
-              </select>
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  style={{
+                    fontSize: "0.8em",
+                    background: "#111827",
+                    color: "#93c5fd",
+                    border: "1px solid #1e3a8a",
+                    borderRadius: 4,
+                    padding: "0.25em 0.7em",
+                    minWidth: 68,
+                    cursor: "pointer",
+                    textAlign: "center"
+                  }}
+                  onClick={applyPendingSelection}
+                >
+                  Done
+                </button>
+              </div>
             </div>
           )}
         </div>
