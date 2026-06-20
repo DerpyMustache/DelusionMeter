@@ -9,7 +9,10 @@ export default function App() {
   const [summary, setSummary] = useState(null);
   const [loadedFilter, setLoadedFilter] = useState({});
   const [error, setError] = useState(null);
+  const [showDelusionHelp, setShowDelusionHelp] = useState(false);
+  const [animatedFilteredCount, setAnimatedFilteredCount] = useState(0);
   const requestIdRef = useRef(0);
+  const delusionHelpRef = useRef(null);
   const [showSplash, setShowSplash] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.sessionStorage.getItem(SPLASH_SEEN_KEY) !== "1";
@@ -108,6 +111,27 @@ export default function App() {
     };
   }, [apiBaseUrl, hasActiveFilters, filter]);
 
+  useEffect(() => {
+    if (!showDelusionHelp) return undefined;
+
+    const onPointerDown = (event) => {
+      if (!delusionHelpRef.current?.contains(event.target)) {
+        setShowDelusionHelp(false);
+      }
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setShowDelusionHelp(false);
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showDelusionHelp]);
+
   const baseCharts = useMemo(
     () => (showLoadedFilteredData ? summary?.charts || [] : INITIAL_CHARTS),
     [showLoadedFilteredData, summary]
@@ -129,6 +153,25 @@ export default function App() {
     return baseCharts.filter((c) => !filter[c.attribute]);
   }, [baseCharts, filter]);
 
+  useEffect(() => {
+    if (!isRefreshing) return undefined;
+
+    const lowerBound = 1;
+    const upperBound = Math.max(lowerBound + 1, defaultTotalCount);
+    const nextRandomCount = () => {
+      const value = Math.floor(Math.random() * (upperBound - lowerBound + 1)) + lowerBound;
+      setAnimatedFilteredCount(value);
+    };
+
+    const kickoffId = window.setTimeout(nextRandomCount, 0);
+    const intervalId = window.setInterval(nextRandomCount, 70);
+
+    return () => {
+      window.clearTimeout(kickoffId);
+      window.clearInterval(intervalId);
+    };
+  }, [isRefreshing, defaultTotalCount]);
+
   if (showSplash) {
     return (
       <div className="loadingLoveScreen">
@@ -149,6 +192,7 @@ export default function App() {
       ? summary.filteredCount
       : 0
     : defaultTotalCount;
+  const displayedFilteredCount = isRefreshing ? animatedFilteredCount : filteredCount;
 
   return (
     <div className="container">
@@ -156,7 +200,7 @@ export default function App() {
       <FilterPanel
         filter={filter}
         onFilterChange={handleFilterChange}
-        filteredCount={filteredCount}
+        filteredCount={displayedFilteredCount}
         attributeOptions={filterOptionsByAttribute}
       />
       {isRefreshing && (
@@ -172,9 +216,10 @@ export default function App() {
 
       {/* Delusion Meter Progress Bar */}
       <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", margin: "16px 0 24px 0", padding: "0 0 8px 0" }}>
-        <div style={{ position: "relative", display: "inline-block", fontWeight: 600, color: "#a7f3d0", marginBottom: 18, fontSize: "clamp(1.2rem, 4.8vw, 1.6rem)", alignSelf: "center" }}>
+        <div ref={delusionHelpRef} style={{ position: "relative", display: "inline-block", fontWeight: 600, color: "#a7f3d0", marginBottom: 18, fontSize: "clamp(1.2rem, 4.8vw, 1.6rem)", alignSelf: "center" }}>
           Delusion Meter
-          <span
+          <button
+            type="button"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -184,6 +229,7 @@ export default function App() {
               borderRadius: "50%",
               background: "#444",
               color: "#fff",
+              border: "none",
               fontWeight: 900,
               fontSize: "0.55em",
               cursor: "pointer",
@@ -192,10 +238,35 @@ export default function App() {
               right: -16,
               boxShadow: "0 1px 4px #0004"
             }}
-            title={"The Delusion Meter shows how picky your filters are. 0% means you're seeing all profiles, 100% means no profiles match your criteria."}
+            onClick={() => setShowDelusionHelp((v) => !v)}
+            aria-label="Explain delusion percent"
+            aria-expanded={showDelusionHelp}
           >
             ?
-          </span>
+          </button>
+          {showDelusionHelp && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 8px)",
+                right: -8,
+                width: "min(280px, 85vw)",
+                textAlign: "left",
+                color: "#e5e7eb",
+                background: "#111827",
+                border: "1px solid rgba(147, 197, 253, 0.45)",
+                borderRadius: 8,
+                padding: "0.55rem 0.65rem",
+                fontSize: "0.7em",
+                fontWeight: 500,
+                lineHeight: 1.35,
+                boxShadow: "0 6px 20px rgba(0, 0, 0, 0.5)",
+                zIndex: 20
+              }}
+            >
+              The Delusion Meter shows how picky your filters are. 0% means you are seeing all profiles, 100% means no profiles match your criteria.
+            </div>
+          )}
         </div>
         <div style={{ width: "100%", maxWidth: 1400, margin: "0 auto", background: "#222", borderRadius: 12, height: "clamp(36px, 7vw, 44px)", position: "relative", boxShadow: "0 1px 6px #0004", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{
