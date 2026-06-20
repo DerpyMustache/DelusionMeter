@@ -115,11 +115,14 @@ export default function App() {
 
   const filterOptionsByAttribute = useMemo(() => {
     const options = {};
-    for (const chart of baseCharts) {
+
+    // Keep editor choices stable even when charts are filtered/hidden.
+    for (const chart of INITIAL_CHARTS) {
       options[chart.attribute] = [...(chart.labels || [])];
     }
+
     return options;
-  }, [baseCharts]);
+  }, []);
 
   const charts = useMemo(() => {
     if (!baseCharts.length) return [];

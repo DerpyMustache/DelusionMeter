@@ -24,6 +24,31 @@ body {
   background: #0b0f17;
 }
 
+.navbar {
+  background: #18181b;
+  padding: 0.5em 0;
+  margin-bottom: 2em;
+  box-shadow: 0 2px 8px #0002;
+}
+
+.navbar-list {
+  display: flex;
+  justify-content: center;
+  gap: 2em;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.navbar-link {
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1.1em;
+  padding: 0.3em 0.7em;
+  border-radius: 6px;
+  transition: background 0.2s, color 0.2s;
+}
+
 .container {
   padding: 24px;
   max-width: 1400px;
@@ -259,6 +284,47 @@ h1 {
 }
 
 @media (max-width: 900px) {
+  .container {
+    padding: 14px;
+  }
+
+  .huge-title {
+    font-size: clamp(2.1rem, 12vw, 3rem);
+    margin-top: 0.15rem;
+    margin-bottom: 0.9rem;
+    line-height: 1.04;
+  }
+
+  .navbar {
+    margin-bottom: 1rem;
+    padding: 0.45em 0;
+  }
+
+  .navbar-list {
+    gap: 0.75em;
+    flex-wrap: wrap;
+    padding: 0 0.5rem;
+  }
+
+  .navbar-link {
+    font-size: 1em;
+    padding: 0.28em 0.55em;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .card {
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .chartBox {
+    height: 290px;
+  }
+
   .promptsPage,
   .faqPage {
     padding: 16px;

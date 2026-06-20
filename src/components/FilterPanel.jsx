@@ -1,6 +1,10 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { prettifyAttributeName } from "../lib/transform.js";
+
+const CHIP_TUTORIAL_SEEN_KEY = "delusionmeter:chipEditHintSeen:v1";
+const CHIP_TUTORIAL_DELAY_MS = 2200;
+const CHIP_TUTORIAL_FLASH_MS = 950;
 
 function religionToNoun(value) {
   const normalized = String(value).trim().toLowerCase();
@@ -216,9 +220,50 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
   const [pendingValues, setPendingValues] = useState([]);
   const [selectionError, setSelectionError] = useState("");
   const [editorPosition, setEditorPosition] = useState({ top: 0, left: 0 });
+  const [chipTutorialVisible, setChipTutorialVisible] = useState(false);
+  const [chipTutorialFlashOn, setChipTutorialFlashOn] = useState(true);
+  const [chipTutorialSeen, setChipTutorialSeen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem(CHIP_TUTORIAL_SEEN_KEY) === "1";
+  });
 
   // Build the improved, natural sentence
   const filterEntries = Object.entries(filter).filter(([, v]) => v);
+  const showChipTutorial = filterEntries.length > 0 && !chipTutorialSeen;
+
+  useEffect(() => {
+    if (!showChipTutorial || chipTutorialVisible) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setChipTutorialVisible(true);
+    }, CHIP_TUTORIAL_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [showChipTutorial, chipTutorialVisible]);
+
+  useEffect(() => {
+    if (!(showChipTutorial && chipTutorialVisible)) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setChipTutorialFlashOn((v) => !v);
+    }, CHIP_TUTORIAL_FLASH_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [showChipTutorial, chipTutorialVisible]);
+
+  const markChipTutorialSeen = () => {
+    if (chipTutorialSeen) return;
+    setChipTutorialSeen(true);
+    setChipTutorialVisible(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(CHIP_TUTORIAL_SEEN_KEY, "1");
+    }
+  };
+
   // Order: height, age, gender, politics, star_sign, then the rest
   const order = ["height", "age", "gender", "politics", "star_sign"];
   const sorted = [
@@ -413,21 +458,68 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
     verticalAlign: "middle"
   };
 
+  const tutorialTargetAttr = showChipTutorial
+    ? adjectiveParts.find((p) => p?.attr)?.attr || nounPart?.attr || verbParts.find((p) => p?.attr)?.attr || null
+    : null;
+
   const renderPhrasePart = (part, key) => {
     if (!part || !part.text) return null;
     if (!part.attr) {
       return <span key={key}>{part.text}</span>;
     }
 
+    const isFirstFilterChip = tutorialTargetAttr !== null && part.attr === tutorialTargetAttr;
+
     return (
-      <button
-        key={key}
-        onClick={(event) => openAttrEditor(part.attr, event)}
-        style={chipButtonStyle}
-        title={`Edit ${prettifyAttributeName(part.attr)}`}
-      >
-        {part.text}
-      </button>
+      <span key={key} style={{ position: "relative", display: "inline-flex" }}>
+        {showChipTutorial && chipTutorialVisible && isFirstFilterChip && (
+          <span
+            style={{
+              position: "absolute",
+              left: "50%",
+              bottom: "calc(100% + 12px)",
+              zIndex: 20,
+              pointerEvents: "none",
+              background: "rgba(6, 28, 20, 0.96)",
+              color: "#a7f3d0",
+              border: "1px solid rgba(16, 185, 129, 0.65)",
+              borderRadius: 8,
+              padding: "0.35rem 0.55rem",
+              fontSize: "0.75em",
+              fontWeight: 700,
+              whiteSpace: "nowrap",
+              opacity: chipTutorialVisible ? (chipTutorialFlashOn ? 1 : 0.35) : 0,
+              transition: chipTutorialVisible
+                ? "opacity 120ms linear"
+                : "opacity 450ms ease",
+              transform: "translateX(-50%)",
+              boxShadow: "0 1px 8px rgba(0, 0, 0, 0.35)"
+            }}
+          >
+            Click a filter to edit
+            <span
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "100%",
+                transform: "translateX(-50%)",
+                width: 0,
+                height: 0,
+                borderLeft: "7px solid transparent",
+                borderRight: "7px solid transparent",
+                borderTop: "8px solid rgba(16, 185, 129, 0.65)"
+              }}
+            />
+          </span>
+        )}
+        <button
+          onClick={(event) => openAttrEditor(part.attr, event)}
+          style={chipButtonStyle}
+          title={`Edit ${prettifyAttributeName(part.attr)}`}
+        >
+          {part.text}
+        </button>
+      </span>
     );
   };
 
@@ -439,6 +531,8 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
   };
 
   const openAttrEditor = (attr, event) => {
+    markChipTutorialSeen();
+
     const rect = event?.currentTarget?.getBoundingClientRect?.();
     const panelWidth = 260;
     const margin = 10;
@@ -493,8 +587,39 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
 
   return (
     <div style={styles.container}>
-      <div style={{ marginBottom: "1rem", fontSize: "1.1em", color: "#e5e7eb", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem 0.45rem" }}>
-        <span style={{ flex: "1 1 260px", lineHeight: 1.35, overflowWrap: "anywhere" }}>
+      <div
+        style={{
+          marginBottom: "1rem",
+          fontSize: "1.1em",
+          color: "#e5e7eb",
+          lineHeight: 1.35,
+          display: "flow-root"
+        }}
+      >
+        {filterEntries.length > 0 && (
+          <button
+            onClick={() => onFilterChange({})}
+            style={{
+              float: "right",
+              marginLeft: 10,
+              marginBottom: 6,
+              color: "#93c5fd",
+              background: "rgba(147, 197, 253, 0.12)",
+              border: "1px solid rgba(147, 197, 253, 0.45)",
+              borderRadius: 6,
+              cursor: "pointer",
+              fontSize: "0.82em",
+              fontWeight: 700,
+              padding: "0.2rem 0.45rem",
+              verticalAlign: "middle"
+            }}
+            title="Clear all filters"
+          >
+            Clear all
+          </button>
+        )}
+
+        <span style={{ overflowWrap: "anywhere" }}>
           {filterEntries.length === 0 ? (
             sentence
           ) : (
@@ -526,26 +651,6 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
             </>
           )}
         </span>
-        {filterEntries.length > 0 && (
-          <button
-            onClick={() => onFilterChange({})}
-            style={{
-              marginLeft: 10,
-              color: "#93c5fd",
-              background: "rgba(147, 197, 253, 0.12)",
-              border: "1px solid rgba(147, 197, 253, 0.45)",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontSize: "0.82em",
-              fontWeight: 700,
-              padding: "0.2rem 0.45rem",
-              verticalAlign: "middle"
-            }}
-            title="Clear all filters"
-          >
-            Clear all
-          </button>
-        )}
       </div>
 
       {editingAttr && (
