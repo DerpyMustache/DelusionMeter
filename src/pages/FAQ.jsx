@@ -1,5 +1,3 @@
-import React from "react";
-
 const faqs = [
   {
     q: "How did you get this data?",
@@ -20,6 +18,10 @@ const faqs = [
   {
     q: "Why is the number of profiles different for each attribute?",
     a: "Bumble doesn't require you to fill out every attribute of your profile, so the number varies based on how many profiles actually included that info."
+  },
+  {
+    q: "Where is the sexuality option?",
+    a: "For whatever reason Bumble doesn't have an actual sexuality option. You simply choose between men, women, and nonbinary people as to who you're looking to date. These selections were not available in the data, so if you're a woman filtering by men, it includes gay men as well. So rest easy knowing whatever your delusion percentage is, it's actually higher."
   }
 ];
 

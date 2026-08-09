@@ -3,9 +3,17 @@ from flask_cors import CORS
 from pymongo import MongoClient
 import os
 from pathlib import Path
+import json
 import re
 
 app = Flask(__name__)
+
+
+def env_bool(name, default=False):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def load_env_file():
@@ -76,67 +84,40 @@ _profiles_cache = None
 _decoded_profiles_cache = None
 _chart_label_schema_cache = None
 
-ATTRIBUTE_MAP = {
-    "1": "age",
-    "2": "cannabis",
-    "3": "drinking",
-    "4": "education_level",
-    "5": "exercise",
-    "6": "gender",
-    "7": "height",
-    "8": "kids",
-    "9": "location",
-    "10": "looking_for",
-    "11": "occupation",
-    "12": "politics",
-    "13": "religion",
-    "14": "smoking",
-    "15": "star_sign",
-}
+def load_shared_constants():
+    constants_path = Path(__file__).resolve().parent.parent / "shared" / "profile_constants.json"
+    if not constants_path.exists():
+        raise RuntimeError(f"Missing shared constants file: {constants_path}")
+    return json.loads(constants_path.read_text(encoding="utf-8"))
 
+
+SHARED_CONSTANTS = load_shared_constants()
+ATTRIBUTE_MAP = SHARED_CONSTANTS["ATTRIBUTE_MAP"]
 FIXED_HEADERS = list(ATTRIBUTE_MAP.values())
+ALLOWED_FILTER_KEYS = set(SHARED_CONSTANTS.get("FILTER_KEYS", FIXED_HEADERS))
+VALUE_MAPS = SHARED_CONSTANTS["VALUE_MAPS"]
+IGNORE_FIELDS = set(SHARED_CONSTANTS["IGNORE_FIELDS"])
+MIN_SLICE_PCT = float(SHARED_CONSTANTS["MIN_SLICE_PCT"])
+DISPLAY_NAME_MAP = SHARED_CONSTANTS["DISPLAY_NAME_MAP"]
+ZODIAC_ORDER = SHARED_CONSTANTS["ZODIAC_ORDER"]
+STATE_POPULATION_ORDER = SHARED_CONSTANTS["STATE_POPULATION_ORDER"]
 
-VALUE_MAPS = {
-    "education_level": {1: "Undergraduate degree", 2: "In college", 3: "High school", 4: "Graduate degree", 5: "Trade/tech school", 6: "In grad school"},
-    "gender": {1: "Man", 2: "Woman", 3: "Non-binary/Gender Nonconforming"},
-    "height": {
-        i + 1: f"{((i + 1 - 1) // 12) + 3}' {((i + 1 - 1) % 12)}''"
-        for i in range(49)
-    },
-    "religion": {1: "Agnostic", 2: "Atheist", 3: "Buddhist", 4: "Catholic", 5: "Christian", 6: "Hindu", 7: "Jain", 8: "Jewish", 9: "Latter-day Saint", 10: "Mormon", 11: "Muslim", 12: "Other", 13: "Sikh", 14: "Spiritual", 15: "Zoroastrian"},
-    "kids": {1: "Don't want", 2: "Not sure yet", 3: "Open to kids", 4: "Has kids", 5: "Want someday"},
-    "exercise": {1: "Almost never", 2: "Sometimes", 3: "Often", 4: "Every day", 5: "Active"},
-    "location": {
-        1: "Alabama", 2: "Alaska", 3: "Arizona", 4: "Arkansas", 5: "California", 6: "Colorado", 7: "Connecticut", 8: "Delaware", 9: "Florida", 10: "Georgia",
-        11: "Hawaii", 12: "Idaho", 13: "Illinois", 14: "Indiana", 15: "Iowa", 16: "Kansas", 17: "Kentucky", 18: "Louisiana", 19: "Maine", 20: "Maryland",
-        21: "Massachusetts", 22: "Michigan", 23: "Minnesota", 24: "Mississippi", 25: "Missouri", 26: "Montana", 27: "Nebraska", 28: "Nevada", 29: "New Hampshire",
-        30: "New Jersey", 31: "New Mexico", 32: "New York", 33: "North Carolina", 34: "North Dakota", 35: "Ohio", 36: "Oklahoma", 37: "Oregon", 38: "Pennsylvania",
-        39: "Rhode Island", 40: "South Carolina", 41: "South Dakota", 42: "Tennessee", 43: "Texas", 44: "Utah", 45: "Vermont", 46: "Virginia", 47: "Washington",
-        48: "West Virginia", 49: "Wisconsin", 50: "Wyoming"
-    },
-    "star_sign": {1: "Aries", 2: "Taurus", 3: "Gemini", 4: "Cancer", 5: "Leo", 6: "Virgo", 7: "Libra", 8: "Scorpio", 9: "Sagittarius", 10: "Capricorn", 11: "Aquarius", 12: "Pisces"},
-    "drinking": {1: "Socially", 2: "Frequently", 3: "Rarely", 4: "Never", 5: "Sober"},
-    "politics": {1: "Liberal", 2: "Conservative", 3: "Moderate", 4: "Apolitical"},
-    "smoking": {1: "Never", 2: "Socially", 3: "Regularly"},
-    "cannabis": {1: "Never", 2: "Socially", 3: "Frequently", 4: "Rarely"},
-    "looking_for": {1: "Relationship", 2: "Something casual", 3: "Don't know yet", 4: "Marriage"},
+SORT_ORDERS = {
+    "cannabis": ["Never", "Socially", "Frequently"],
+    "drinking": ["Never", "Rarely", "Socially", "Frequently", "Sober"],
+    "smoking": ["Never", "Socially", "Regularly"],
+    "exercise": ["Almost never", "Sometimes", "Often", "Every day", "Active"],
+    "education_level": ["High school", "Trade/tech school", "In college", "In grad school", "Undergraduate degree", "Graduate degree"],
+    "politics": ["Liberal", "Moderate", "Conservative", "Apolitical"],
+    "kids": ["Don't want", "Not sure yet", "Open to kids", "Has kids", "Want someday"],
+    "looking_for": ["Relationship", "Marriage", "Something casual", "Don't know yet"],
 }
-
-IGNORE_FIELDS = {"user_id", "name", "about_me", "education", "occupation_raw"}
-MIN_SLICE_PCT = 2.0
-DISPLAY_NAME_MAP = {"education_level": "Education", "looking_for": "Looking for", "star_sign": "Star sign"}
-ZODIAC_ORDER = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]
-
-STATE_POPULATION_ORDER = [
-    "California", "Texas", "Florida", "New York", "Pennsylvania", "New Jersey", "Washington",
-    "Louisiana", "Oklahoma", "Connecticut", "Georgia", "Illinois", "Ohio", "Michigan",
-    "North Carolina", "Massachusetts", "Virginia", "Arizona", "Colorado", "Maryland",
-    "Minnesota", "Missouri", "Indiana", "Tennessee", "Wisconsin", "South Carolina",
-    "Louisiana", "Kentucky", "Oregon", "Alabama", "New Mexico", "Nevada", "Utah",
-    "Arkansas", "Kansas", "Mississippi", "Iowa", "Idaho", "Nebraska", "West Virginia",
-    "New Hampshire", "Maine", "Montana", "Rhode Island", "Delaware", "South Dakota",
-    "North Dakota", "Alaska", "Vermont", "Wyoming", "Hawaii"
-]
+SORT_ORDER_INDEX = {
+    attr: {label: i for i, label in enumerate(order)}
+    for attr, order in SORT_ORDERS.items()
+}
+STATE_POPULATION_INDEX = {label: i for i, label in enumerate(STATE_POPULATION_ORDER)}
+ZODIAC_ORDER_INDEX = {label: i for i, label in enumerate(ZODIAC_ORDER)}
 
 def get_profiles_cached():
     global _profiles_cache
@@ -158,15 +139,93 @@ def map_value(attr, value):
     value_map = VALUE_MAPS.get(attr)
     if not value_map:
         return value
-    if value in value_map:
-        return value_map[value]
-    try:
-        ivalue = int(value)
-        if ivalue in value_map:
-            return value_map[ivalue]
-    except Exception:
-        pass
+
+    def iter_lookup_keys(raw):
+        seen = set()
+
+        def push(k):
+            marker = f"{type(k).__name__}:{k}"
+            if marker in seen:
+                return
+            seen.add(marker)
+            yield k
+
+        try:
+            hash(raw)
+            yield from push(raw)
+        except TypeError:
+            pass
+
+        sraw = str(raw)
+        yield from push(sraw)
+
+        try:
+            iraw = int(raw)
+            yield from push(iraw)
+            yield from push(str(iraw))
+        except Exception:
+            pass
+
+    for key in iter_lookup_keys(value):
+        if key in value_map:
+            return value_map[key]
+
     return value
+
+
+def normalize_scalar(value):
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def normalize_filter_values(raw):
+    values = raw if isinstance(raw, list) else [raw]
+    out = []
+    for value in values:
+        normalized = normalize_scalar(value)
+        if normalized:
+            out.append(normalized)
+    return out
+
+
+def normalize_filter_payload(incoming_filters):
+    filters = {}
+    for key, raw in incoming_filters.items():
+        attr = normalize_scalar(key)
+        if not attr or attr not in ALLOWED_FILTER_KEYS:
+            continue
+        values = normalize_filter_values(raw)
+        if values:
+            filters[attr] = values
+    return filters
+
+
+def count_non_blank(rows, attr):
+    return sum(1 for row in rows if normalize_scalar(row.get(attr)))
+
+
+def values_match(attr, row_value, selected_value):
+    selected = normalize_scalar(selected_value)
+    if not selected:
+        return False
+
+    # Compare both raw and mapped forms to avoid false negatives when data contains coded values.
+    candidates = [
+        row_value,
+        map_value(attr, row_value),
+    ]
+
+    for candidate in candidates:
+        c = normalize_scalar(candidate)
+        if not c:
+            continue
+        if c == selected:
+            return True
+        if c.lower() == selected.lower():
+            return True
+
+    return False
 
 
 def decode_profiles_cached():
@@ -378,39 +437,49 @@ def sort_entries_for_attr(attr, entries):
     elif attr == "height":
         entries.sort(key=lambda x: parse_height_bucket_start(x[0]))
     elif attr == "star_sign":
-        entries.sort(key=lambda x: ZODIAC_ORDER.index(x[0]) if x[0] in ZODIAC_ORDER else 999)
+        entries.sort(key=lambda x: ZODIAC_ORDER_INDEX.get(x[0], 999))
     elif attr == "location":
-        entries.sort(key=lambda x: STATE_POPULATION_ORDER.index(x[0]) if x[0] in STATE_POPULATION_ORDER else 999)
-    elif attr == "cannabis":
-        order = ["Never", "Socially", "Frequently"]
-        entries.sort(key=lambda x: order.index(x[0]) if x[0] in order else 999)
-    elif attr == "drinking":
-        order = ["Never", "Rarely", "Socially", "Frequently", "Sober"]
-        entries.sort(key=lambda x: order.index(x[0]) if x[0] in order else 999)
-    elif attr == "smoking":
-        order = ["Never", "Socially", "Regularly"]
-        entries.sort(key=lambda x: order.index(x[0]) if x[0] in order else 999)
-    elif attr == "exercise":
-        order = ["Almost never", "Sometimes", "Often", "Every day", "Active"]
-        entries.sort(key=lambda x: order.index(x[0]) if x[0] in order else 999)
-    elif attr == "education_level":
-        order = ["High school", "Trade/tech school", "In college", "In grad school", "Undergraduate degree", "Graduate degree"]
-        entries.sort(key=lambda x: order.index(x[0]) if x[0] in order else 999)
-    elif attr == "politics":
-        order = ["Liberal", "Moderate", "Conservative", "Apolitical"]
-        entries.sort(key=lambda x: order.index(x[0]) if x[0] in order else 999)
-    elif attr == "kids":
-        order = ["Don't want", "Not sure yet", "Open to kids", "Has kids", "Want someday"]
-        entries.sort(key=lambda x: order.index(x[0]) if x[0] in order else 999)
-    elif attr == "looking_for":
-        order = ["Relationship", "Marriage", "Something casual", "Don't know yet"]
-        entries.sort(key=lambda x: order.index(x[0]) if x[0] in order else 999)
+        entries.sort(key=lambda x: STATE_POPULATION_INDEX.get(x[0], 999))
+    elif attr in SORT_ORDER_INDEX:
+        order_index = SORT_ORDER_INDEX[attr]
+        entries.sort(key=lambda x: order_index.get(x[0], 999))
     elif attr == "religion":
         entries.sort(key=lambda x: x[1], reverse=True)
     elif attr == "occupation":
         entries.sort(key=lambda x: x[0])
     else:
         entries.sort(key=lambda x: x[1], reverse=True)
+
+
+def collapse_small_slices(entries, answered_count, *, keep_all=False, explicit_other_to_other=False):
+    labels = []
+    values = []
+
+    if keep_all:
+        for label, count in entries:
+            labels.append(label)
+            values.append(count)
+        return labels, values
+
+    other_count = 0
+    for label, count in entries:
+        pct = (count / answered_count) * 100
+        is_explicit_other = (
+            explicit_other_to_other
+            and normalize_scalar(label).lower() == "other"
+        )
+
+        if is_explicit_other or pct < MIN_SLICE_PCT:
+            other_count += count
+        else:
+            labels.append(label)
+            values.append(count)
+
+    if other_count > 0:
+        labels.append("Other")
+        values.append(other_count)
+
+    return labels, values
 
 
 def build_chart_label_schema(rows, headers):
@@ -427,30 +496,12 @@ def build_chart_label_schema(rows, headers):
         entries = list(counts.items())
         sort_entries_for_attr(attr, entries)
 
-        labels = []
-        if attr in {"star_sign", "looking_for", "kids"}:
-            labels = [l for l, _ in entries]
-        elif attr == "religion":
-            other_count = 0
-            for label, count in entries:
-                pct = (count / answered_count) * 100
-                is_explicit_other = str(label).strip().lower() == "other"
-                if is_explicit_other or pct < MIN_SLICE_PCT:
-                    other_count += count
-                else:
-                    labels.append(label)
-            if other_count > 0:
-                labels.append("Other")
-        else:
-            other_count = 0
-            for label, count in entries:
-                pct = (count / answered_count) * 100
-                if pct < MIN_SLICE_PCT:
-                    other_count += count
-                else:
-                    labels.append(label)
-            if other_count > 0:
-                labels.append("Other")
+        labels, _ = collapse_small_slices(
+            entries,
+            answered_count,
+            keep_all=attr in {"star_sign", "looking_for", "kids"},
+            explicit_other_to_other=attr == "religion",
+        )
 
         schema[attr] = labels
 
@@ -502,34 +553,13 @@ def build_attribute_charts(rows, headers, label_schema=None):
 
             values = [fixed_counts[label] for label in labels]
             answered_count = sum(values)
-        elif attr in {"star_sign", "looking_for", "kids"}:
-            labels = [l for l, _ in entries]
-            values = [c for _, c in entries]
-        elif attr == "religion":
-            other_count = 0
-            for label, count in entries:
-                pct = (count / answered_count) * 100
-                is_explicit_other = str(label).strip().lower() == "other"
-                if is_explicit_other or pct < MIN_SLICE_PCT:
-                    other_count += count
-                else:
-                    labels.append(label)
-                    values.append(count)
-            if other_count > 0:
-                labels.append("Other")
-                values.append(other_count)
         else:
-            other_count = 0
-            for label, count in entries:
-                pct = (count / answered_count) * 100
-                if pct < MIN_SLICE_PCT:
-                    other_count += count
-                else:
-                    labels.append(label)
-                    values.append(count)
-            if other_count > 0:
-                labels.append("Other")
-                values.append(other_count)
+            labels, values = collapse_small_slices(
+                entries,
+                answered_count,
+                keep_all=attr in {"star_sign", "looking_for", "kids"},
+                explicit_other_to_other=attr == "religion",
+            )
 
         charts.append({
             "attribute": attr,
@@ -609,32 +639,41 @@ def apply_filters(rows, filters):
     if not filters:
         return rows
 
+    def build_attr_predicate(attr, raw_val):
+        values = tuple(normalize_filter_values(raw_val))
+        if not values:
+            return None
+
+        if attr == "age":
+            def predicate(row):
+                row_value = row.get(attr)
+                return any(matches_age_filter(row_value, val) for val in values)
+            return predicate
+
+        if attr == "height":
+            def predicate(row):
+                row_value = row.get(attr)
+                return any(matches_height_filter(row_value, val) for val in values)
+            return predicate
+
+        def predicate(row):
+            row_value = row.get(attr)
+            return any(values_match(attr, row_value, val) for val in values)
+
+        return predicate
+
+    predicates = []
+    for attr, raw_val in filters.items():
+        predicate = build_attr_predicate(attr, raw_val)
+        if predicate is not None:
+            predicates.append(predicate)
+
+    if not predicates:
+        return rows
+
     out = []
     for row in rows:
-        keep = True
-        for attr, raw_val in filters.items():
-            values = raw_val if isinstance(raw_val, list) else [raw_val]
-            values = [v for v in values if v is not None and str(v).strip() != ""]
-            if not values:
-                continue
-
-            if attr == "age":
-                if not any(matches_age_filter(row.get(attr), val) for val in values):
-                    keep = False
-                    break
-                continue
-
-            if attr == "height":
-                if not any(matches_height_filter(row.get(attr), val) for val in values):
-                    keep = False
-                    break
-                continue
-
-            if not any(row.get(attr) == val for val in values):
-                keep = False
-                break
-
-        if keep:
+        if all(predicate(row) for predicate in predicates):
             out.append(row)
     return out
 
@@ -646,11 +685,7 @@ def compute_delusion_pct(all_rows, filtered_rows, filters):
     min_answered = None
     min_attr = None
     for attr in filters.keys():
-        answered = 0
-        for row in all_rows:
-            value = row.get(attr)
-            if value is not None and str(value).strip() != "":
-                answered += 1
+        answered = count_non_blank(all_rows, attr)
         if min_answered is None or answered < min_answered:
             min_answered = answered
             min_attr = attr
@@ -658,16 +693,12 @@ def compute_delusion_pct(all_rows, filtered_rows, filters):
     if not min_answered or min_answered <= 0:
         return 0.0
 
-    filtered_answered = 0
-    for row in filtered_rows:
-        value = row.get(min_attr)
-        if value is not None and str(value).strip() != "":
-            filtered_answered += 1
+    filtered_answered = count_non_blank(filtered_rows, min_attr)
 
     raw_delusion = 100 * (1 - (filtered_answered / min_answered))
     if len(filtered_rows) == 0:
         return 100.0
-    return round(min(99.9, max(0.0, raw_delusion)), 1)
+    return min(99.9, max(0.0, raw_delusion))
 
 
 @app.route('/')
@@ -689,16 +720,7 @@ def get_summary():
     payload = request.get_json(silent=True) if request.method == 'POST' else None
     payload = payload or {}
     incoming_filters = payload.get('filter') or payload.get('filters') or {}
-    filters = {}
-    for key, raw in incoming_filters.items():
-        attr = str(key)
-        if isinstance(raw, list):
-            vals = [str(v).strip() for v in raw if v is not None and str(v).strip() != ""]
-            if vals:
-                filters[attr] = vals
-            continue
-        if raw is not None and str(raw).strip() != "":
-            filters[attr] = str(raw).strip()
+    filters = normalize_filter_payload(incoming_filters)
 
     all_rows = decode_profiles_cached()
     filtered_rows = apply_filters(all_rows, filters)
@@ -718,4 +740,4 @@ def get_profiles():
     return jsonify(docs)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=env_bool("FLASK_DEBUG", default=False))

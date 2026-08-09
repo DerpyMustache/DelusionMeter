@@ -1,16 +1,30 @@
 /* Huge title at the top */
 .huge-title {
-  font-size: 3.5rem;
-  font-weight: 900;
-  letter-spacing: -0.04em;
+  font-family: "Courier New", "Lucida Console", monospace;
+  font-size: 3.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   margin-bottom: 1.2rem;
   margin-top: 0.5rem;
   text-align: center;
-  color: #a7f3d0;
-  text-shadow: 0 2px 24px #0b0f17, 0 1px 0 #222;
+  color: var(--accent-soft);
+  text-shadow: 0 0 18px rgba(255, 123, 193, 0.45), 2px 2px 0 #2a0c3d;
 }
 :root {
   color-scheme: dark;
+  --bg-main: #17001f;
+  --bg-deep: #2a0838;
+  --panel: #251136;
+  --panel-2: #2f1744;
+  --border-soft: rgba(255, 167, 223, 0.35);
+  --text-main: #ffe9fa;
+  --text-muted: #dcb6ea;
+  --accent: #ff5fb4;
+  --accent-strong: #e93da0;
+  --accent-soft: #ff9cd3;
+  --accent-purple: #bb73ff;
+  --warning: #ffbe72;
+  --danger: #ff6f9e;
 }
 
 * {
@@ -19,16 +33,158 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  color: #e5e7eb;
-  background: #0b0f17;
+  font-family: "Trebuchet MS", Tahoma, Verdana, sans-serif;
+  color: var(--text-main);
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 112, 181, 0.26), transparent 40%),
+    radial-gradient(circle at 88% 16%, rgba(187, 115, 255, 0.22), transparent 42%),
+    radial-gradient(circle at 70% 78%, rgba(255, 121, 196, 0.19), transparent 46%),
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.018) 0,
+      rgba(255, 255, 255, 0.018) 6px,
+      rgba(0, 0, 0, 0) 6px,
+      rgba(0, 0, 0, 0) 12px
+    ),
+    linear-gradient(160deg, var(--bg-main), var(--bg-deep));
+  min-height: 100vh;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.024) 0,
+    rgba(255, 255, 255, 0.024) 1px,
+    rgba(0, 0, 0, 0) 1px,
+    rgba(0, 0, 0, 0) 3px
+  );
+  opacity: 0.24;
+  z-index: 0;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  width: 200vw;
+  height: 200vh;
+  left: -50vw;
+  top: -50vh;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.28;
+  transform: rotate(-18deg);
+  transform-origin: center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 36 36'%3E%3Cg fill='%23d6102d'%3E%3Cpath d='M18 27s-8-5.3-8-11a4.6 4.6 0 0 1 8-3 4.6 4.6 0 0 1 8 3c0 5.7-8 11-8 11z'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 72px 72px;
+  background-repeat: repeat;
+  animation: driftingHearts 18s linear infinite;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes driftingHearts {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 220px 220px;
+  }
+}
+
+@keyframes sharePromptPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 126, 196, 0.58), 0 0 10px rgba(255, 126, 196, 0.45);
+    transform: scale(1);
+  }
+  60% {
+    box-shadow: 0 0 0 9px rgba(255, 126, 196, 0), 0 0 24px rgba(255, 126, 196, 0.72);
+    transform: scale(1.03);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 126, 196, 0), 0 0 10px rgba(255, 126, 196, 0.45);
+    transform: scale(1);
+  }
+}
+
+.sharePromptGlow {
+  animation: sharePromptPulse 1.45s ease-in-out infinite;
+  border-color: rgba(255, 168, 223, 0.9) !important;
+}
+
+.shareButtonAnchor {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  z-index: 25;
+}
+
+.shareResultButton {
+  border-radius: 8px;
+  background: rgba(255, 184, 232, 0.2);
+  color: #ffe9fa;
+  border: 1px solid rgba(255, 184, 232, 0.55);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 0.42rem 1rem;
+  cursor: pointer;
+}
+
+.shareButtonDesktopLabel {
+  display: inline;
+}
+
+.shareButtonMobileLabel {
+  display: none;
+}
+
+@keyframes confettiBlast {
+  0% {
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--drift), 130vh, 0) rotate(var(--rot));
+    opacity: 0;
+  }
+}
+
+.confettiBurst {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 260;
+  overflow: hidden;
+}
+
+.confettiPiece {
+  position: absolute;
+  top: -14px;
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+  animation: confettiBlast var(--dur) cubic-bezier(0.12, 0.66, 0.22, 1) var(--delay) forwards;
 }
 
 .navbar {
-  background: #18181b;
-  padding: 0.5em 0;
-  margin-bottom: 2em;
-  box-shadow: 0 2px 8px #0002;
+  background: linear-gradient(180deg, #3d1f58 0%, #2f1448 100%);
+  border-bottom: 2px solid var(--accent-soft);
+  border-top: 2px solid rgba(255, 210, 242, 0.32);
+  padding: 0.55em 0;
+  margin-bottom: 1.6em;
+  box-shadow: 0 8px 20px rgba(8, 2, 15, 0.45);
 }
 
 .navbar-list {
@@ -42,11 +198,15 @@ body {
 
 .navbar-link {
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 700;
+  font-family: "Verdana", "Geneva", sans-serif;
   font-size: 1.1em;
-  padding: 0.3em 0.7em;
-  border-radius: 6px;
-  transition: background 0.2s, color 0.2s;
+  padding: 0.32em 0.78em;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 
 .container {
@@ -58,7 +218,7 @@ body {
 h1 {
   margin: 0 0 18px 0;
   font-size: 22px;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
 }
 
 .grid {
@@ -69,12 +229,14 @@ h1 {
 }
 
 .card {
-  background: #151a23;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 100%);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  box-shadow:
+    0 10px 22px rgba(11, 0, 19, 0.45),
+    inset 0 1px 0 rgba(255, 222, 247, 0.18),
+    inset 0 -1px 0 rgba(96, 37, 124, 0.6);
   padding: 14px;
-  /*backdrop-filter: blur(6px);*/
 }
 
 .cardHeader {
@@ -82,17 +244,20 @@ h1 {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .cardHeader h2 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: clamp(18px, 1.4vw, 21px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  color: #ff6b8a;
 }
 
 .meta {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -101,33 +266,39 @@ h1 {
   height: 320px;
   position: relative;
   width: 100%;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  background: rgba(22, 8, 33, 0.42);
+  border: 1px solid rgba(255, 176, 228, 0.2);
   overflow: hidden;
 }
 
 .smallNote {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
   margin-top: 10px;
 }
 
 .loading {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
 .loadingLoveScreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
+  overflow: hidden;
+  z-index: 500;
   background:
     radial-gradient(circle at 25% 25%, rgba(255, 192, 203, 0.14), transparent 42%),
     radial-gradient(circle at 80% 20%, rgba(255, 105, 180, 0.11), transparent 45%),
-    #0b0f17;
+    linear-gradient(150deg, #22052f, #2a0c3e);
 }
 
 .loadingLoveContent {
@@ -168,7 +339,7 @@ h1 {
 }
 
 .loadingLoveText {
-  color: #ffc1df;
+  color: #ffd4ef;
   font-weight: 800;
   letter-spacing: 0.02em;
   font-size: clamp(2.4rem, 7vw, 5.4rem);
@@ -194,6 +365,20 @@ h1 {
   justify-content: center;
 }
 
+.promptsIntroPanel {
+  width: min(100%, 980px);
+  margin: 0 0 16px 0;
+  padding: 16px 18px;
+  background: linear-gradient(180deg, #301448 0%, #261038 100%);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  color: var(--text-main);
+  font-size: 1.06em;
+  line-height: 1.5;
+  text-align: left;
+}
+
 .promptsTitle {
   text-align: center;
   margin-bottom: 24px;
@@ -209,25 +394,30 @@ h1 {
 }
 
 .faqGrid {
-  display: flex;
-  flex-direction: row;
-  gap: 32px;
-  justify-content: center;
-  align-items: flex-start;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
 }
 
 .faqCard {
-  background: #181a1b;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px #0006;
+  background: linear-gradient(180deg, #301448 0%, #261038 100%);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
   padding: 32px 36px;
-  min-width: 320px;
-  max-width: 420px;
-  flex: 1 1 320px;
+  min-width: 0;
+  width: 100%;
+  align-self: start;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+@media (max-width: 1300px) {
+  .faqGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .faqQuestion {
@@ -238,7 +428,7 @@ h1 {
 
 .faqAnswer {
   font-size: 1.15em;
-  color: #d1d5db;
+  color: var(--text-muted);
 }
 
 .wordCloudViewer {
@@ -249,19 +439,40 @@ h1 {
   width: min(100%, 1400px);
 }
 
+.wordCloudControlsPanel {
+  width: min(100%, 860px);
+  background: #241136;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  padding: 18px 18px 14px;
+  margin-bottom: 14px;
+}
+
 .wordCloudTitle {
   text-align: center;
-  margin-bottom: 16px;
+  margin: 0 0 12px 0;
 }
 
 .wordCloudSelect {
-  margin-bottom: 24px;
-  width: min(100%, 560px);
+  margin-bottom: 0;
+  width: 100%;
   min-width: 0;
   text-align: center;
   font-size: 1.1em;
   padding: 0.5em;
   border-radius: 6px;
+  background: linear-gradient(180deg, #3b224f 0%, #2f1a43 100%);
+  border: 1px solid rgba(255, 184, 232, 0.5);
+  color: #ffe9fa;
+  font-weight: 600;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.wordCloudSelect option {
+  background: #2a1239;
+  color: #ffe9fa;
 }
 
 .wordCloudImageWrap {
@@ -277,7 +488,8 @@ h1 {
   width: 1350px;
   height: 675px;
   max-width: 100%;
-  border: 1px solid #333;
+  background: #241136;
+  border: 1px solid var(--border-soft);
   border-radius: 8px;
   display: block;
   margin: 0 auto;
@@ -325,13 +537,36 @@ h1 {
     height: 290px;
   }
 
+  .shareButtonAnchor {
+    position: static;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: 12px;
+  }
+
+  .shareResultButton {
+    width: min(100%, 320px);
+    text-align: center;
+    font-size: 0.98rem;
+    padding: 0.52rem 0.9rem;
+  }
+
+  .shareButtonDesktopLabel {
+    display: none;
+  }
+
+  .shareButtonMobileLabel {
+    display: inline;
+  }
+
   .promptsPage,
   .faqPage {
     padding: 16px;
   }
 
   .faqGrid {
-    flex-wrap: wrap;
+    grid-template-columns: 1fr;
     gap: 14px;
   }
 
@@ -361,19 +596,45 @@ h1 {
     margin-bottom: 14px;
   }
 
+  .promptsIntroPanel {
+    width: 100%;
+    margin-bottom: 12px;
+    padding: 12px 12px 10px;
+    font-size: 0.97em;
+    line-height: 1.45;
+  }
+
   .wordCloudTitle {
     font-size: 1.08em;
     margin-bottom: 10px;
   }
 
+  .wordCloudControlsPanel {
+    padding: 12px 12px 10px;
+    margin-bottom: 10px;
+  }
+
   .wordCloudSelect {
     font-size: 1em;
-    margin-bottom: 14px;
+    margin-bottom: 0;
   }
 
   .wordCloudImage {
     width: 100%;
     height: auto;
     aspect-ratio: 2 / 1;
+  }
+
+  .delusionHelpButton {
+    top: -2px !important;
+    right: -12px !important;
+  }
+
+  .delusionHelpPopover {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: min(260px, calc(100vw - 28px)) !important;
+    max-width: calc(100vw - 28px) !important;
   }
 }

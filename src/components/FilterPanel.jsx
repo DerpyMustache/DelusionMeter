@@ -1,10 +1,11 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { prettifyAttributeName } from "../lib/transform.js";
 
 const CHIP_TUTORIAL_SEEN_KEY = "delusionmeter:chipEditHintSeen:v1";
 const CHIP_TUTORIAL_DELAY_MS = 2200;
 const CHIP_TUTORIAL_FLASH_MS = 950;
+const FILTER_PRIORITY_ORDER = ["height", "age", "gender", "politics", "star_sign"];
 
 function religionToNoun(value) {
   const normalized = String(value).trim().toLowerCase();
@@ -71,6 +72,17 @@ function normalizeValues(raw) {
   return value ? [value] : [];
 }
 
+function normalizeLowerWithNever(values) {
+  return values.map((value) => {
+    const normalized = String(value).trim().toLowerCase();
+    return normalized === "never" ? "never" : normalized;
+  });
+}
+
+function isSingleNever(values) {
+  return values.length === 1 && values[0] === "never";
+}
+
 function joinWithOr(values) {
   if (values.length === 0) return "";
   if (values.length === 1) return values[0];
@@ -79,7 +91,7 @@ function joinWithOr(values) {
 }
 
 function parseFeetInches(text) {
-  const match = String(text).trim().match(/^(\d+)\s*'\s*(\d+)"$/);
+  const match = String(text).trim().match(/^(\d+)\s*'\s*(\d+)"?$/);
   if (!match) return null;
   return Number(match[1]) * 12 + Number(match[2]);
 }
@@ -188,12 +200,56 @@ function combineAgeBuckets(values) {
 function combineHeightBuckets(values) {
   const ranges = values
     .map((value) => {
-      const match = value.match(/^(\d+\s*'\s*\d+")-(\d+\s*'\s*\d+")$/);
-      if (!match) return null;
-      const start = parseFeetInches(match[1]);
-      const end = parseFeetInches(match[2]);
-      if (start === null || end === null) return null;
-      return { start, end };
+      const trimmed = String(value).trim();
+
+      const rangeMatch = trimmed.match(/^(\d+\s*'\s*\d+"?)-(\d+\s*'\s*\d+"?)$/);
+      if (rangeMatch) {
+        const start = parseFeetInches(rangeMatch[1]);
+        const end = parseFeetInches(rangeMatch[2]);
+        if (start === null || end === null) return null;
+        return {
+          start,
+          end,
+          ltBoundary: null,
+          gtBoundary: null,
+        };
+      }
+
+      const ltMatch = trimmed.match(/^<(\d+\s*'\s*\d+"?)$/);
+      if (ltMatch) {
+        const boundary = parseFeetInches(ltMatch[1]);
+        if (boundary === null) return null;
+        return {
+          start: Number.NEGATIVE_INFINITY,
+          end: boundary - 1,
+          ltBoundary: boundary,
+          gtBoundary: null,
+        };
+      }
+
+      const gtMatch = trimmed.match(/^>(\d+\s*'\s*\d+"?)$/);
+      if (gtMatch) {
+        const boundary = parseFeetInches(gtMatch[1]);
+        if (boundary === null) return null;
+        return {
+          start: boundary + 1,
+          end: Number.POSITIVE_INFINITY,
+          ltBoundary: null,
+          gtBoundary: boundary,
+        };
+      }
+
+      const single = parseFeetInches(trimmed);
+      if (single !== null) {
+        return {
+          start: single,
+          end: single,
+          ltBoundary: null,
+          gtBoundary: null,
+        };
+      }
+
+      return null;
     })
     .filter(Boolean)
     .sort((a, b) => a.start - b.start);
@@ -207,70 +263,48 @@ function combineHeightBuckets(values) {
       merged.push({ ...range });
     } else {
       last.end = Math.max(last.end, range.end);
+      if (last.ltBoundary == null && range.ltBoundary != null) {
+        last.ltBoundary = range.ltBoundary;
+      }
+      if (last.gtBoundary == null && range.gtBoundary != null) {
+        last.gtBoundary = range.gtBoundary;
+      }
     }
   }
 
-  const labels = merged.map((r) => `${formatFeetInches(r.start)}-${formatFeetInches(r.end)}`);
+  const labels = merged.map((r) => {
+    if (r.start === Number.NEGATIVE_INFINITY) {
+      if (r.ltBoundary != null && Number.isFinite(r.end) && r.end >= r.ltBoundary) {
+        return `<${formatFeetInches(r.ltBoundary)}-${formatFeetInches(r.end)}`;
+      }
+      if (r.ltBoundary != null) {
+        return `<${formatFeetInches(r.ltBoundary)}`;
+      }
+      return `<${formatFeetInches(r.end + 1)}`;
+    }
+
+    if (r.end === Number.POSITIVE_INFINITY) {
+      if (r.gtBoundary != null && Number.isFinite(r.start) && r.start <= r.gtBoundary) {
+        return `${formatFeetInches(r.start)}+`;
+      }
+      if (r.gtBoundary != null && Number.isFinite(r.start) && r.start <= r.gtBoundary + 1) {
+        return `>${formatFeetInches(r.gtBoundary)}`;
+      }
+      if (Number.isFinite(r.start)) {
+        return `${formatFeetInches(r.start)}+`;
+      }
+      return `>${formatFeetInches(r.gtBoundary ?? 0)}`;
+    }
+
+    return r.start === r.end
+      ? formatFeetInches(r.start)
+      : `${formatFeetInches(r.start)}-${formatFeetInches(r.end)}`;
+  });
+
   return joinWithOr(labels);
 }
 
-
-export default function FilterPanel({ filter, onFilterChange, filteredCount = 0, attributeOptions = {} }) {
-  const [editingAttr, setEditingAttr] = useState(null);
-  const [pendingValues, setPendingValues] = useState([]);
-  const [selectionError, setSelectionError] = useState("");
-  const [editorPosition, setEditorPosition] = useState({ top: 0, left: 0 });
-  const [chipTutorialVisible, setChipTutorialVisible] = useState(false);
-  const [chipTutorialFlashOn, setChipTutorialFlashOn] = useState(true);
-  const [chipTutorialSeen, setChipTutorialSeen] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return window.localStorage.getItem(CHIP_TUTORIAL_SEEN_KEY) === "1";
-  });
-
-  // Build the improved, natural sentence
-  const filterEntries = Object.entries(filter).filter(([, v]) => v);
-  const showChipTutorial = filterEntries.length > 0 && !chipTutorialSeen;
-
-  useEffect(() => {
-    if (!showChipTutorial || chipTutorialVisible) {
-      return undefined;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setChipTutorialVisible(true);
-    }, CHIP_TUTORIAL_DELAY_MS);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [showChipTutorial, chipTutorialVisible]);
-
-  useEffect(() => {
-    if (!(showChipTutorial && chipTutorialVisible)) {
-      return undefined;
-    }
-
-    const intervalId = window.setInterval(() => {
-      setChipTutorialFlashOn((v) => !v);
-    }, CHIP_TUTORIAL_FLASH_MS);
-
-    return () => window.clearInterval(intervalId);
-  }, [showChipTutorial, chipTutorialVisible]);
-
-  const markChipTutorialSeen = () => {
-    if (chipTutorialSeen) return;
-    setChipTutorialSeen(true);
-    setChipTutorialVisible(false);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(CHIP_TUTORIAL_SEEN_KEY, "1");
-    }
-  };
-
-  // Order: height, age, gender, politics, star_sign, then the rest
-  const order = ["height", "age", "gender", "politics", "star_sign"];
-  const sorted = [
-    ...order.map(key => filterEntries.find(([k]) => k === key)).filter(Boolean),
-    ...filterEntries.filter(([k]) => !order.includes(k)),
-  ];
-
+function buildSentenceParts(sorted) {
   let adjectiveParts = [];
   let nounPart = null;
   let verbParts = [];
@@ -309,22 +343,22 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
     } else if (attr === "height") {
       adjectiveParts.push({ attr, text: combineHeightBuckets(values) });
     } else if (attr === "drinking") {
-      const drinkingText = values.map((value) => value.toLowerCase() === "never" ? "never" : value.toLowerCase());
-      if (drinkingText.length === 1 && drinkingText[0] === "never") {
+      const drinkingText = normalizeLowerWithNever(values);
+      if (isSingleNever(drinkingText)) {
         verbParts.push({ attr, text: "never drink" });
       } else {
         verbParts.push({ attr, text: `drink ${joinWithOr(drinkingText)}` });
       }
     } else if (attr === "cannabis") {
-      const cannabisText = values.map((value) => value.toLowerCase() === "never" ? "never" : value.toLowerCase());
-      if (cannabisText.length === 1 && cannabisText[0] === "never") {
+      const cannabisText = normalizeLowerWithNever(values);
+      if (isSingleNever(cannabisText)) {
         verbParts.push({ attr, text: "never use cannabis" });
       } else {
         verbParts.push({ attr, text: `use cannabis ${joinWithOr(cannabisText)}` });
       }
         } else if (attr === "smoking") {
-          const smokingText = values.map((value) => value.toLowerCase() === "never" ? "never" : value.toLowerCase());
-          if (smokingText.length === 1 && smokingText[0] === "never") {
+          const smokingText = normalizeLowerWithNever(values);
+          if (isSingleNever(smokingText)) {
             verbParts.push({ attr, text: "never smoke" });
           } else {
             verbParts.push({ attr, text: `smoke ${joinWithOr(smokingText)}` });
@@ -337,7 +371,7 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
         if (exerciseText === "never") return "never";
         return exerciseText;
       });
-      if (exerciseParts.length === 1 && exerciseParts[0] === "never") {
+      if (isSingleNever(exerciseParts)) {
         verbParts.push({ attr, text: "never exercise" });
       } else {
         verbParts.push({ attr, text: `exercise ${joinWithOr(exerciseParts)}` });
@@ -426,6 +460,100 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
     }
   }
 
+  return {
+    adjectiveParts,
+    nounPart,
+    verbParts,
+    ageSelected,
+    ageValueText,
+    ageAdjectiveIndex,
+    politicsValues,
+    politicsAdjectiveIndex,
+  };
+}
+
+
+export default function FilterPanel({ filter, onFilterChange, filteredCount = 0, attributeOptions = {}, onTypeDescriptionChange }) {
+  const [editingAttr, setEditingAttr] = useState(null);
+  const [pendingValues, setPendingValues] = useState([]);
+  const [selectionError, setSelectionError] = useState("");
+  const [editorPosition, setEditorPosition] = useState({ top: 0, left: 0 });
+  const editorRef = useRef(null);
+  const [chipTutorialVisible, setChipTutorialVisible] = useState(false);
+  const [chipTutorialFlashOn, setChipTutorialFlashOn] = useState(true);
+  const [chipTutorialSeen, setChipTutorialSeen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem(CHIP_TUTORIAL_SEEN_KEY) === "1";
+  });
+
+  // Build the improved, natural sentence
+  const filterEntries = useMemo(
+    () => Object.entries(filter).filter(([, v]) => v),
+    [filter]
+  );
+  const showChipTutorial = filterEntries.length > 0 && !chipTutorialSeen;
+
+  useEffect(() => {
+    if (!showChipTutorial || chipTutorialVisible) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setChipTutorialVisible(true);
+    }, CHIP_TUTORIAL_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [showChipTutorial, chipTutorialVisible]);
+
+  useEffect(() => {
+    if (!(showChipTutorial && chipTutorialVisible)) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setChipTutorialFlashOn((v) => !v);
+    }, CHIP_TUTORIAL_FLASH_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [showChipTutorial, chipTutorialVisible]);
+
+  const markChipTutorialSeen = () => {
+    if (chipTutorialSeen) return;
+    setChipTutorialSeen(true);
+    setChipTutorialVisible(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(CHIP_TUTORIAL_SEEN_KEY, "1");
+    }
+  };
+
+  // Order: height, age, gender, politics, star_sign, then the rest
+  const sorted = useMemo(() => {
+    const orderRank = new Map(FILTER_PRIORITY_ORDER.map((key, index) => [key, index]));
+    return filterEntries
+      .map((entry, index) => ({ entry, index }))
+      .sort((a, b) => {
+        const aRank = orderRank.has(a.entry[0]) ? orderRank.get(a.entry[0]) : FILTER_PRIORITY_ORDER.length;
+        const bRank = orderRank.has(b.entry[0]) ? orderRank.get(b.entry[0]) : FILTER_PRIORITY_ORDER.length;
+        if (aRank !== bRank) return aRank - bRank;
+        return a.index - b.index;
+      })
+      .map(({ entry }) => entry);
+  }, [filterEntries]);
+
+  let {
+    adjectiveParts,
+    nounPart,
+    verbParts,
+    ageSelected,
+    ageValueText,
+    ageAdjectiveIndex,
+    politicsValues,
+    politicsAdjectiveIndex,
+  } = useMemo(() => buildSentenceParts(sorted), [sorted]);
+
+  // Avoid mutating values directly from a memoized object.
+  adjectiveParts = [...adjectiveParts];
+
   if (!nounPart && politicsValues.length > 0 && politicsAdjectiveIndex !== -1) {
     nounPart = { attr: "politics", text: joinWithOr(politicsValues.map((value) => politicsToNoun(value))) };
     adjectiveParts = adjectiveParts.filter((_, idx) => idx !== politicsAdjectiveIndex);
@@ -446,10 +574,40 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
     }
   }
 
+  // Extract type description for share functionality
+  useEffect(() => {
+    if (onTypeDescriptionChange) {
+      let typeDesc = "";
+      if (filterEntries.length === 0) {
+        typeDesc = "everyone";
+      } else {
+        // Build "adjectives noun who verbs" part
+        const parts = [];
+        adjectiveParts.forEach((part) => {
+          if (part?.text) parts.push(part.text);
+        });
+        if (nounPart?.text) parts.push(nounPart.text);
+        if (verbParts.length > 0) {
+          parts.push("who");
+          const verbTexts = verbParts.map((part) => part?.text).filter(Boolean);
+          if (verbTexts.length === 1) {
+            parts.push(verbTexts[0]);
+          } else if (verbTexts.length === 2) {
+            parts.push(`${verbTexts[0]} and ${verbTexts[1]}`);
+          } else if (verbTexts.length > 2) {
+            parts.push(`${verbTexts.slice(0, -1).join(", ")}, and ${verbTexts[verbTexts.length - 1]}`);
+          }
+        }
+        typeDesc = parts.join(" ");
+      }
+      onTypeDescriptionChange(typeDesc);
+    }
+  }, [adjectiveParts, nounPart, verbParts, onTypeDescriptionChange, filterEntries.length]);
+
   const chipButtonStyle = {
-    color: "#a7f3d0",
-    background: "rgba(22, 163, 74, 0.12)",
-    border: "1px solid rgba(167, 243, 208, 0.45)",
+    color: "#ffd3ef",
+    background: "rgba(255, 126, 196, 0.14)",
+    border: "1px solid rgba(255, 184, 232, 0.45)",
     borderRadius: 6,
     cursor: "pointer",
     fontSize: "0.82em",
@@ -480,9 +638,9 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
               bottom: "calc(100% + 12px)",
               zIndex: 20,
               pointerEvents: "none",
-              background: "rgba(6, 28, 20, 0.96)",
-              color: "#a7f3d0",
-              border: "1px solid rgba(16, 185, 129, 0.65)",
+              background: "rgba(43, 18, 61, 0.97)",
+              color: "#ffd3ef",
+              border: "1px solid rgba(255, 126, 196, 0.6)",
               borderRadius: 8,
               padding: "0.35rem 0.55rem",
               fontSize: "0.75em",
@@ -507,7 +665,7 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
                 height: 0,
                 borderLeft: "7px solid transparent",
                 borderRight: "7px solid transparent",
-                borderTop: "8px solid rgba(16, 185, 129, 0.65)"
+                borderTop: "8px solid rgba(255, 126, 196, 0.6)"
               }}
             />
           </span>
@@ -585,13 +743,34 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
     onFilterChange(nextFilter);
   };
 
+  useEffect(() => {
+    if (!editingAttr) return undefined;
+
+    const onPointerDown = (event) => {
+      if (editorRef.current?.contains(event.target)) return;
+      setPendingValues(normalizeValues(filter[editingAttr]));
+      setSelectionError("");
+      setEditingAttr(null);
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [editingAttr, filter]);
+
+  if (filterEntries.length === 0) {
+    return null;
+  }
+
   return (
     <div style={styles.container}>
       <div
         style={{
           marginBottom: "1rem",
           fontSize: "1.1em",
-          color: "#e5e7eb",
+          color: "#ffe9fa",
+          textShadow: "0 1px 3px rgba(0, 0, 0, 0.55)",
           lineHeight: 1.35,
           display: "flow-root"
         }}
@@ -603,9 +782,9 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
               float: "right",
               marginLeft: 10,
               marginBottom: 6,
-              color: "#93c5fd",
-              background: "rgba(147, 197, 253, 0.12)",
-              border: "1px solid rgba(147, 197, 253, 0.45)",
+              color: "#ffd0ef",
+              background: "rgba(255, 126, 196, 0.14)",
+              border: "1px solid rgba(255, 184, 232, 0.45)",
               borderRadius: 6,
               cursor: "pointer",
               fontSize: "0.82em",
@@ -642,7 +821,13 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
                   {" who "}
                   {verbParts.map((part, idx) => (
                     <span key={`verb-${idx}`}>
-                      {idx > 0 ? " and " : ""}
+                      {idx === 0
+                        ? ""
+                        : verbParts.length === 2
+                          ? " and "
+                          : idx === verbParts.length - 1
+                            ? ", and "
+                            : ", "}
                       {renderPhrasePart(part, `verb-part-${idx}`)}
                     </span>
                   ))}
@@ -654,8 +839,8 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
       </div>
 
       {editingAttr && (
-        <div style={{ position: "fixed", top: editorPosition.top, left: editorPosition.left, zIndex: 10000, display: "inline-block", background: "#222", borderRadius: 6, boxShadow: "0 6px 22px #000b", padding: "0.45rem 0.75rem", border: "1px solid rgba(255,255,255,0.1)" }}>
-          <div style={{ color: "#9ca3af", fontSize: "0.78em", marginBottom: 6 }}>
+        <div ref={editorRef} style={{ position: "fixed", top: editorPosition.top, left: editorPosition.left, zIndex: 10000, display: "inline-block", background: "#2a1239", borderRadius: 8, boxShadow: "0 6px 22px #000b", padding: "0.45rem 0.75rem", border: "1px solid rgba(255,184,232,0.35)" }}>
+          <div style={{ color: "#dcb6ea", fontSize: "0.78em", marginBottom: 6 }}>
             Edit {prettifyAttributeName(editingAttr)}
           </div>
           <div style={{ minWidth: 210, maxHeight: 240, overflowY: "auto", padding: "0.2rem 0" }}>
@@ -669,7 +854,7 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
                     alignItems: "center",
                     gap: "0.45rem",
                     padding: "0.2rem 0.1rem",
-                    color: checked ? "#a7f3d0" : "#e5e7eb",
+                    color: checked ? "#ffb8e7" : "#ffe9fa",
                     fontSize: "0.9em",
                     cursor: "pointer"
                   }}
@@ -685,7 +870,7 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
             })}
           </div>
           {selectionError && (
-            <div style={{ color: "#fca5a5", fontSize: "0.78em", marginTop: 6, maxWidth: 240, lineHeight: 1.3 }}>
+            <div style={{ color: "#ffcde2", fontSize: "0.78em", marginTop: 6, maxWidth: 240, lineHeight: 1.3 }}>
               {selectionError}
             </div>
           )}
@@ -694,8 +879,8 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
               style={{
                 fontSize: "0.8em",
                 background: "transparent",
-                color: "#fca5a5",
-                border: "1px solid #7f1d1d",
+                color: "#ffcde2",
+                border: "1px solid rgba(255, 111, 158, 0.65)",
                 borderRadius: 4,
                 padding: "0.2em 0.45em",
                 cursor: "pointer"
@@ -710,14 +895,14 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
                 onFilterChange(nextFilter);
               }}
             >
-              Clear
+              Remove
             </button>
             <button
               style={{
                 fontSize: "0.8em",
                 background: "transparent",
-                color: "#d1d5db",
-                border: "1px solid #4b5563",
+                color: "#e7c7f2",
+                border: "1px solid rgba(231, 199, 242, 0.4)",
                 borderRadius: 4,
                 padding: "0.2em 0.45em",
                 cursor: "pointer"
@@ -733,9 +918,9 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
             <button
               style={{
                 fontSize: "0.8em",
-                background: "#111827",
-                color: "#93c5fd",
-                border: "1px solid #1e3a8a",
+                background: "rgba(255, 126, 196, 0.18)",
+                color: "#ffd9ef",
+                border: "1px solid rgba(255, 126, 196, 0.55)",
                 borderRadius: 4,
                 padding: "0.2em 0.45em",
                 cursor: "pointer"
@@ -755,33 +940,9 @@ const styles = {
   container: {
     marginBottom: "1.5rem",
     padding: "1rem",
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backgroundColor: "#241136",
     borderRadius: "0.5rem",
-    borderLeft: "4px solid rgba(255, 255, 255, 0.2)",
-  },
-  controls: {
-    display: "flex",
-    gap: "1rem",
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-  label: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-  },
-  labelText: {
-    fontWeight: "500",
-    color: "#e5e7eb",
-  },
-  select: {
-    padding: "0.5rem 0.75rem",
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    color: "#e5e7eb",
-    border: "1px solid rgba(255, 255, 255, 0.2)",
-    borderRadius: "0.375rem",
-    fontSize: "0.875rem",
-    cursor: "pointer",
-    minWidth: "150px",
+    borderLeft: "4px solid rgba(255, 126, 196, 0.48)",
+    border: "1px solid rgba(255, 176, 228, 0.2)",
   },
 };

@@ -12,17 +12,19 @@ export default function WordCloudViewer() {
 
   return (
     <div className="wordCloudViewer">
-      <h2 className="wordCloudTitle">Prompt Word Clouds</h2>
-      <select
-        value={selected}
-        onChange={e => setSelected(e.target.value)}
-        className="wordCloudSelect"
-      >
-        <option value="">Select a prompt...</option>
-        {Object.keys(prompts).map(prompt => (
-          <option key={prompt} value={prompt}>{prompt}</option>
-        ))}
-      </select>
+      <div className="wordCloudControlsPanel">
+        <h2 className="wordCloudTitle">Word Clouds</h2>
+        <select
+          value={selected}
+          onChange={e => setSelected(e.target.value)}
+          className="wordCloudSelect"
+        >
+          <option value="">Select a prompt...</option>
+          {Object.keys(prompts).map(prompt => (
+            <option key={prompt} value={prompt}>{prompt}</option>
+          ))}
+        </select>
+      </div>
       {selected && (
         <div className="wordCloudImageWrap">
           <img

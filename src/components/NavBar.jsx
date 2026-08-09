@@ -1,4 +1,3 @@
-import React from "react";
 import { Link, useLocation } from "react-router-dom";
 
 export default function NavBar() {
@@ -17,8 +16,9 @@ export default function NavBar() {
               to={path}
               className="navbar-link"
               style={{
-                color: location.pathname === path ? "#fbbf24" : "#a7f3d0",
-                background: location.pathname === path ? "#27272a" : "none",
+                  color: location.pathname === path ? "#ffd0ef" : "#ffc0e5",
+                  background: location.pathname === path ? "linear-gradient(180deg, #6b2f83 0%, #4d1f65 100%)" : "none",
+                  borderColor: location.pathname === path ? "rgba(255, 184, 232, 0.7)" : "transparent",
               }}
             >
               {label}

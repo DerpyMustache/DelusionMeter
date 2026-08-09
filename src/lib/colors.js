@@ -1,27 +1,33 @@
 const LOOKING_FOR_COLORS = {
-  Relationship: "#ef4444", // red
-  "Something casual": "#ec4899", // pink
-  "Don't know yet": "#7c3aed", // purple
-  Marriage: "#ffffff", // white
+  Relationship: "#ef4444",
+  "Something casual": "#ec4899", 
+  "Don't know yet": "#7c3aed",
+  Marriage: "#ffffff",
 };
 const SMOKING_COLORS = {
-  Never: "#f5f5f2",      // paper
-  Socially: "#d6a04a",   // filter
-  Regularly: "#b6b28b",  // band/ash
+  Never: "#f5f5f2",
+  Socially: "#d6a04a",
+  Regularly: "#b6b28b", 
+};
+
+const CANNABIS_COLORS = {
+  Never: "#e4483c",
+  Socially: "#14532d",
+  Frequently: "#22c55e",
 };
 const ZODIAC_COLORS = {
-  Aries: "#e53935",        // red
-  Taurus: "#ef6c00",      // orange
-  Gemini: "#f9a825",      // yellow
-  Cancer: "#fdd835",      // yellow-gold
-  Leo: "#cddc39",         // yellow-green
-  Virgo: "#8bc34a",       // green
-  Libra: "#43a047",       // green-teal
-  Scorpio: "#26a69a",     // teal
-  Sagittarius: "#1e88e5", // blue
-  Capricorn: "#3949ab",   // indigo
-  Aquarius: "#8e24aa",    // purple
-  Pisces: "#d81b60",      // magenta
+  Aries: "#ff3b30",
+  Taurus: "#ff7a00",
+  Gemini: "#ffb300",
+  Cancer: "#ffe119",
+  Leo: "#b7e10f",
+  Virgo: "#41d93f",
+  Libra: "#00c97f",
+  Scorpio: "#00b8d9",
+  Sagittarius: "#2196f3",
+  Capricorn: "#4f63ff",
+  Aquarius: "#8a3ffc",
+  Pisces: "#d81b9c",
 };
 
 const POLITICS_COLORS = {
@@ -34,11 +40,28 @@ const POLITICS_COLORS = {
 const GENDER_COLORS = {
   Man: "#3b82f6",
   Woman: "#ec4899",
-  Other: "#facc15",
-  "Non-binary/Gender Nonconforming": "#facc15", // yellow
+  "Non-binary/Gender Nonconforming": "#facc15",
 };
 
-export function colorForLabel(label, attribute = null) {
+const RELIGION_COLORS = {
+  Christian: "#e11d48",
+  Agnostic: "#f97316",
+  Catholic: "#c7d72f",   
+  Spiritual: "#4ade80",    
+  Other: "#2dd4bf",         
+  Atheist: "#60a5fa",      
+  Jewish: "#6366f1",        
+  Hindu: "#a855f7",        
+  Muslim: "#14b8a6",         
+  Buddhist: "#f59e0b",     
+  Sikh: "#22c55e",        
+  "Latter-day Saint": "#eab308",
+  Jain: "#10b981",         
+  Mormon: "#f43f5e",     
+  Zoroastrian: "#3b82f6", 
+};
+
+function getMappedColor(label, attribute = null) {
   if (attribute === "star_sign" && ZODIAC_COLORS[label]) {
     return ZODIAC_COLORS[label];
   }
@@ -55,13 +78,35 @@ export function colorForLabel(label, attribute = null) {
     return SMOKING_COLORS[label];
   }
 
+  if (attribute === "cannabis" && CANNABIS_COLORS[label]) {
+    return CANNABIS_COLORS[label];
+  }
+
   if (attribute === "looking_for" && LOOKING_FOR_COLORS[label]) {
     return LOOKING_FOR_COLORS[label];
   }
 
-  // fallback
-  const h = Math.abs(hash(label)) % 360;
-  return `hsl(${h},70%,55%)`;
+  if (attribute === "religion" && RELIGION_COLORS[label]) {
+    return RELIGION_COLORS[label];
+  }
+
+  return null;
+}
+
+// Produces visually separated colors within a single chart.
+export function colorsForLabels(labels, attribute = null) {
+  return labels.map((label) => {
+    const mapped = getMappedColor(label, attribute);
+    if (mapped) return mapped;
+
+    // Stable fallback by attribute+label so filtering/order changes do not recolor slices.
+    const seed = `${attribute || "default"}:${label}`;
+    const h = Math.abs(hash(seed));
+    const hue = h % 360;
+    const saturation = 64 + (h % 12); // 64-75
+    const lightness = 48 + (h % 10);  // 48-57
+    return `hsl(${hue},${saturation}%,${lightness}%)`;
+  });
 }
 
 function hash(str) {
