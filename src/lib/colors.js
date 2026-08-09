@@ -15,6 +15,46 @@ const CANNABIS_COLORS = {
   Socially: "#14532d",
   Frequently: "#22c55e",
 };
+const EXERCISE_COLORS = {
+  "Almost never": "#ef4444",
+  Sometimes: "#3b82f6",
+  Often: "#f59e0b",
+  "Every day": "#8b5cf6",
+  Active: "#22c55e",
+};
+const LOCATION_COLORS = {
+  California: "#ef4444",
+  Texas: "#f97316",
+  Florida: "#eab308",
+  "New York": "#22c55e",
+  Pennsylvania: "#14b8a6",
+  "New Jersey": "#a855f7",
+  Washington: "#ec4899",
+  Louisiana: "#f43f5e",
+  Oklahoma: "#84cc16",
+  Connecticut: "#06b6d4",
+  Illinois: "#6366f1",
+  Ohio: "#fb923c",
+  Georgia: "#10b981",
+  Michigan: "#c084fc",
+  Arizona: "#fbbf24",
+  "North Carolina": "#38bdf8",
+  Virginia: "#4ade80",
+  Massachusetts: "#e879f9",
+  Colorado: "#ff7a00",
+  Tennessee: "#67e8f9",
+  Indiana: "#f87171",
+  Missouri: "#a3e635",
+  Maryland: "#818cf8",
+  Wisconsin: "#fdba74",
+  Minnesota: "#34d399",
+  "South Carolina": "#fb7185",
+  Alabama: "#7dd3fc",
+  Oregon: "#fde68a",
+  Kentucky: "#d946ef",
+  Nevada: "#4ade80",
+  Other: "#94a3b8",
+};
 const ZODIAC_COLORS = {
   Aries: "#ff3b30",
   Taurus: "#ff7a00",
@@ -80,6 +120,14 @@ function getMappedColor(label, attribute = null) {
 
   if (attribute === "cannabis" && CANNABIS_COLORS[label]) {
     return CANNABIS_COLORS[label];
+  }
+
+  if (attribute === "exercise" && EXERCISE_COLORS[label]) {
+    return EXERCISE_COLORS[label];
+  }
+
+  if (attribute === "location" && LOCATION_COLORS[label]) {
+    return LOCATION_COLORS[label];
   }
 
   if (attribute === "looking_for" && LOOKING_FOR_COLORS[label]) {

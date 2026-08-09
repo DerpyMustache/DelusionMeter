@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { prettifyAttributeName } from "../lib/transform.js";
 
 const CHIP_TUTORIAL_SEEN_KEY = "delusionmeter:chipEditHintSeen:v1";
@@ -478,9 +478,9 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
   const [pendingValues, setPendingValues] = useState([]);
   const [selectionError, setSelectionError] = useState("");
   const [editorPosition, setEditorPosition] = useState({ top: 0, left: 0 });
-  const editorRef = useRef(null);
+  const [editorIsCentered, setEditorIsCentered] = useState(false);
   const [chipTutorialVisible, setChipTutorialVisible] = useState(false);
-  const [chipTutorialFlashOn, setChipTutorialFlashOn] = useState(true);
+  const [, setChipTutorialFlashOn] = useState(true);
   const [chipTutorialSeen, setChipTutorialSeen] = useState(() => {
     if (typeof window === "undefined") return true;
     return window.localStorage.getItem(CHIP_TUTORIAL_SEEN_KEY) === "1";
@@ -616,60 +616,14 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
     verticalAlign: "middle"
   };
 
-  const tutorialTargetAttr = showChipTutorial
-    ? adjectiveParts.find((p) => p?.attr)?.attr || nounPart?.attr || verbParts.find((p) => p?.attr)?.attr || null
-    : null;
-
   const renderPhrasePart = (part, key) => {
     if (!part || !part.text) return null;
     if (!part.attr) {
       return <span key={key}>{part.text}</span>;
     }
 
-    const isFirstFilterChip = tutorialTargetAttr !== null && part.attr === tutorialTargetAttr;
-
     return (
       <span key={key} style={{ position: "relative", display: "inline-flex" }}>
-        {showChipTutorial && chipTutorialVisible && isFirstFilterChip && (
-          <span
-            style={{
-              position: "absolute",
-              left: "50%",
-              bottom: "calc(100% + 12px)",
-              zIndex: 20,
-              pointerEvents: "none",
-              background: "rgba(43, 18, 61, 0.97)",
-              color: "#ffd3ef",
-              border: "1px solid rgba(255, 126, 196, 0.6)",
-              borderRadius: 8,
-              padding: "0.35rem 0.55rem",
-              fontSize: "0.75em",
-              fontWeight: 700,
-              whiteSpace: "nowrap",
-              opacity: chipTutorialVisible ? (chipTutorialFlashOn ? 1 : 0.35) : 0,
-              transition: chipTutorialVisible
-                ? "opacity 120ms linear"
-                : "opacity 450ms ease",
-              transform: "translateX(-50%)",
-              boxShadow: "0 1px 8px rgba(0, 0, 0, 0.35)"
-            }}
-          >
-            Click a filter to edit
-            <span
-              style={{
-                position: "absolute",
-                left: "50%",
-                top: "100%",
-                transform: "translateX(-50%)",
-                width: 0,
-                height: 0,
-                borderLeft: "7px solid transparent",
-                borderRight: "7px solid transparent",
-                borderTop: "8px solid rgba(255, 126, 196, 0.6)"
-              }}
-            />
-          </span>
-        )}
         <button
           onClick={(event) => openAttrEditor(part.attr, event)}
           style={chipButtonStyle}
@@ -691,16 +645,23 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
   const openAttrEditor = (attr, event) => {
     markChipTutorialSeen();
 
-    const rect = event?.currentTarget?.getBoundingClientRect?.();
-    const panelWidth = 260;
-    const margin = 10;
-    const left = Math.max(
-      margin,
-      Math.min((rect?.right ?? margin) + 8, window.innerWidth - panelWidth - margin)
-    );
-    const top = Math.max(margin, (rect?.top ?? margin) - 6);
+    if (window.innerWidth <= 700) {
+      setEditorIsCentered(true);
+    } else {
+      const rect = event?.currentTarget?.getBoundingClientRect?.();
+      const panelWidth = 280;
+      const margin = 10;
+      const scrollX = window.scrollX || window.pageXOffset || 0;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+      const leftInViewport = Math.max(
+        margin,
+        Math.min((rect?.right ?? margin) + 8, window.innerWidth - panelWidth - margin)
+      );
+      const topInViewport = Math.max(margin, (rect?.bottom ?? margin) + 6);
+      setEditorIsCentered(false);
+      setEditorPosition({ top: topInViewport + scrollY, left: leftInViewport + scrollX });
+    }
 
-    setEditorPosition({ top, left });
     setEditingAttr(attr);
     setPendingValues(normalizeValues(filter[attr]));
     setSelectionError("");
@@ -743,28 +704,101 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
     onFilterChange(nextFilter);
   };
 
-  useEffect(() => {
-    if (!editingAttr) return undefined;
-
-    const onPointerDown = (event) => {
-      if (editorRef.current?.contains(event.target)) return;
-      setPendingValues(normalizeValues(filter[editingAttr]));
-      setSelectionError("");
-      setEditingAttr(null);
-    };
-
-    window.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [editingAttr, filter]);
-
   if (filterEntries.length === 0) {
     return null;
   }
 
   return (
     <div style={styles.container}>
+      {showChipTutorial && chipTutorialVisible && (
+        <div
+          onClick={markChipTutorialSeen}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 300,
+            background: "rgba(12, 4, 20, 0.78)",
+            backdropFilter: "blur(2px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "clamp(14px, 4vw, 32px)",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#241136",
+              border: "1px solid rgba(255, 156, 211, 0.5)",
+              borderRadius: 14,
+              boxShadow: "0 14px 34px rgba(0, 0, 0, 0.55)",
+              padding: "clamp(1.2rem, 3vw, 2rem)",
+              maxWidth: "min(480px, 92vw)",
+              textAlign: "center",
+              color: "var(--text-main)",
+            }}
+          >
+            <div style={{ fontSize: "clamp(1.1rem, 2.2vw, 1.45rem)", fontWeight: 800, color: "#ffd3ef", marginBottom: "0.7rem" }}>
+              Editing filters:
+            </div>
+            <div style={{ fontSize: "clamp(0.88rem, 1.5vw, 1rem)", color: "var(--text-muted)", lineHeight: 1.55, marginBottom: "1rem" }}>
+              The highlighted words in your summary are clickable. For example:
+            </div>
+            {/* Example filter sentence with a mock chip */}
+            <div style={{
+              background: "rgba(41, 15, 62, 0.65)",
+              border: "1px solid rgba(255, 184, 232, 0.22)",
+              borderRadius: 8,
+              padding: "0.7rem 0.9rem",
+              marginBottom: "1.1rem",
+              fontSize: "clamp(0.88rem, 1.5vw, 1rem)",
+              color: "#ffe9fa",
+              textAlign: "left",
+              lineHeight: 1.6,
+            }}>
+              {"Showing 12,450 profiles from people who use "}
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.3rem",
+                color: "#ffd3ef",
+                background: "rgba(255, 126, 196, 0.22)",
+                border: "1px solid rgba(255, 184, 232, 0.55)",
+                borderRadius: 6,
+                padding: "0.12rem 0.42rem",
+                fontWeight: 700,
+                cursor: "default",
+              }}>
+                cannabis socially
+              </span>
+              <span style={{
+                display: "inline-block",
+                marginLeft: "0.4rem",
+                fontSize: "0.82em",
+                color: "#ff9cd3",
+                fontStyle: "italic",
+              }}>
+                ← tap to change this 
+              </span>
+            </div>
+            <button
+              onClick={markChipTutorialSeen}
+              style={{
+                background: "rgba(255, 126, 196, 0.22)",
+                color: "#ffe9fa",
+                border: "1px solid rgba(255, 184, 232, 0.55)",
+                borderRadius: 8,
+                padding: "0.55rem 1.4rem",
+                cursor: "pointer",
+                fontWeight: 700,
+                fontSize: "clamp(0.95rem, 1.4vw, 1.05rem)",
+              }}
+            >
+              Got it!
+            </button>
+          </div>
+        </div>
+      )}
       <div
         style={{
           marginBottom: "1rem",
@@ -839,11 +873,25 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
       </div>
 
       {editingAttr && (
-        <div ref={editorRef} style={{ position: "fixed", top: editorPosition.top, left: editorPosition.left, zIndex: 10000, display: "inline-block", background: "#2a1239", borderRadius: 8, boxShadow: "0 6px 22px #000b", padding: "0.45rem 0.75rem", border: "1px solid rgba(255,184,232,0.35)" }}>
-          <div style={{ color: "#dcb6ea", fontSize: "0.78em", marginBottom: 6 }}>
+        <div
+          onClick={editorIsCentered ? () => { setPendingValues(normalizeValues(filter[editingAttr])); setSelectionError(""); setEditingAttr(null); setEditorIsCentered(false); } : undefined}
+          style={editorIsCentered ? {
+            position: "fixed",
+            inset: 0,
+            zIndex: 10000,
+            background: "rgba(12, 4, 20, 0.78)",
+            backdropFilter: "blur(2px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "clamp(14px, 4vw, 32px)",
+          } : { position: "absolute", top: editorPosition.top, left: editorPosition.left, zIndex: 10000, display: "inline-block" }}
+        >
+        <div style={{ background: "#2a1239", borderRadius: 8, boxShadow: "0 6px 22px #000b", padding: "0.6rem 0.9rem", border: "1px solid rgba(255,184,232,0.35)", ...(editorIsCentered ? { width: "min(320px, 88vw)" } : {}) }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ color: "#dcb6ea", fontSize: "0.86em", marginBottom: 8 }}>
             Edit {prettifyAttributeName(editingAttr)}
           </div>
-          <div style={{ minWidth: 210, maxHeight: 240, overflowY: "auto", padding: "0.2rem 0" }}>
+          <div style={{ minWidth: 220, maxHeight: 280, overflowY: "auto", padding: "0.25rem 0" }}>
             {getOptionsForAttr(editingAttr).map((val) => {
               const checked = pendingValues.includes(val);
               return (
@@ -852,10 +900,10 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "0.45rem",
-                    padding: "0.2rem 0.1rem",
+                    gap: "0.58rem",
+                    padding: "0.34rem 0.15rem",
                     color: checked ? "#ffb8e7" : "#ffe9fa",
-                    fontSize: "0.9em",
+                    fontSize: "0.99em",
                     cursor: "pointer"
                   }}
                 >
@@ -863,6 +911,7 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
                     type="checkbox"
                     checked={checked}
                     onChange={() => togglePendingValue(val)}
+                    style={{ width: 18, height: 18, cursor: "pointer" }}
                   />
                   <span>{val}</span>
                 </label>
@@ -877,12 +926,13 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, gap: 8 }}>
             <button
               style={{
-                fontSize: "0.8em",
+                fontSize: "0.9em",
                 background: "transparent",
                 color: "#ffcde2",
                 border: "1px solid rgba(255, 111, 158, 0.65)",
                 borderRadius: 4,
-                padding: "0.2em 0.45em",
+                padding: "0.38em 0.7em",
+                minWidth: 86,
                 cursor: "pointer"
               }}
               onClick={() => {
@@ -892,6 +942,7 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
                 setPendingValues([]);
                 setSelectionError("");
                 setEditingAttr(null);
+                setEditorIsCentered(false);
                 onFilterChange(nextFilter);
               }}
             >
@@ -899,30 +950,33 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
             </button>
             <button
               style={{
-                fontSize: "0.8em",
+                fontSize: "0.9em",
                 background: "transparent",
                 color: "#e7c7f2",
                 border: "1px solid rgba(231, 199, 242, 0.4)",
                 borderRadius: 4,
-                padding: "0.2em 0.45em",
+                padding: "0.38em 0.7em",
+                minWidth: 86,
                 cursor: "pointer"
               }}
               onClick={() => {
                 setPendingValues(normalizeValues(filter[editingAttr]));
                 setSelectionError("");
                 setEditingAttr(null);
+                setEditorIsCentered(false);
               }}
             >
               Cancel
             </button>
             <button
               style={{
-                fontSize: "0.8em",
+                fontSize: "0.9em",
                 background: "rgba(255, 126, 196, 0.18)",
                 color: "#ffd9ef",
                 border: "1px solid rgba(255, 126, 196, 0.55)",
                 borderRadius: 4,
-                padding: "0.2em 0.45em",
+                padding: "0.38em 0.7em",
+                minWidth: 86,
                 cursor: "pointer"
               }}
               onClick={applyAttrSelection}
@@ -930,6 +984,7 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
               Done
             </button>
           </div>
+        </div>
         </div>
       )}
     </div>

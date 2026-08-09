@@ -100,6 +100,9 @@ export default function App() {
 
   function handleFilterChange(nextFilter) {
     const cleaned = normalizeFilterObject(nextFilter);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     setOpenFilterEditorAttr(null);
     if (!hasFilterEntries(cleaned)) {
       setSummary(null);
@@ -400,11 +403,6 @@ export default function App() {
           attributeOptions={filterOptionsByAttribute}
           onTypeDescriptionChange={setTypeDescription}
         />
-        {isRefreshing && (
-          <div className="loading" style={{ marginBottom: "0.75rem" }}>
-            Applying filters...
-          </div>
-        )}
         {error && (
           <div className="loading" style={{ marginBottom: "0.75rem", color: "var(--danger)" }}>
             Error: {error}

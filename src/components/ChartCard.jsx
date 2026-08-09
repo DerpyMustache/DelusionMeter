@@ -5,7 +5,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { colorsForLabels } from "../lib/colors.js";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -54,22 +54,6 @@ export default function ChartCard({
   const [pendingValues, setPendingValues] = useState([]);
   const [selectionError, setSelectionError] = useState("");
   const showDropdown = isFilterEditorOpen;
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    if (!showDropdown) return undefined;
-
-    const onPointerDown = (event) => {
-      if (!dropdownRef.current?.contains(event.target)) {
-        onToggleFilterEditor?.(false);
-      }
-    };
-
-    window.addEventListener("pointerdown", onPointerDown);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
-    };
-  }, [showDropdown, onToggleFilterEditor]);
 
   const displayLabels = attribute === "gender"
     ? labels.map((l) => (l === "Other" ? "Non-binary/Gender Nonconforming" : l))
@@ -203,16 +187,16 @@ export default function ChartCard({
     <div className="card" style={{ position: "relative" }}>
       <div className="cardHeader" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative" }}>
         <h2>{title}</h2>
-        <div ref={dropdownRef} style={{ position: "relative" }}>
+        <div style={{ position: "relative" }}>
           {canFilter && (
             <button
               style={{
-                fontSize: "0.98em",
+                fontSize: "1.02em",
                 background: "#3a1c55",
                 color: "#ffd3ef",
                 border: "1px solid rgba(255, 176, 228, 0.45)",
                 borderRadius: 6,
-                padding: "0.22em 0.64em",
+                padding: "0.38em 0.82em",
                 lineHeight: 1.1,
                 cursor: "pointer",
               }}
@@ -236,11 +220,11 @@ export default function ChartCard({
                 border: "1px solid rgba(255, 176, 228, 0.35)",
                 borderRadius: 8,
                 boxShadow: "0 6px 16px rgba(0, 0, 0, 0.45)",
-                padding: "0.3em 0.7em",
+                padding: "0.5em 0.8em",
                 width: "fit-content",
               }}
             >
-              <div style={{ width: "max-content", minWidth: 120, maxWidth: 260, maxHeight: 240, overflowY: "auto", padding: "0.2rem 0 0 0" }}>
+              <div style={{ width: "max-content", minWidth: 180, maxWidth: 300, maxHeight: 280, overflowY: "auto", padding: "0.25rem 0 0 0" }}>
                 {filterOptions.map((val) => {
                   const checked = pendingValues.includes(val);
                   return (
@@ -249,10 +233,10 @@ export default function ChartCard({
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: "0.45rem",
-                        padding: "0.2rem 0.1rem",
+                        gap: "0.58rem",
+                        padding: "0.34rem 0.15rem",
                         color: checked ? "#ffb8e7" : "#ffe9fa",
-                        fontSize: "0.9em",
+                        fontSize: "0.99em",
                         whiteSpace: "nowrap",
                         cursor: "pointer",
                       }}
@@ -261,6 +245,7 @@ export default function ChartCard({
                         type="checkbox"
                         checked={checked}
                         onChange={() => togglePendingValue(val)}
+                        style={{ width: 18, height: 18, cursor: "pointer" }}
                       />
                       <span>{val}</span>
                     </label>
@@ -275,13 +260,13 @@ export default function ChartCard({
               <div style={{ display: "flex", justifyContent: "center", marginTop: selectionError ? 8 : 4, paddingTop: 2, gap: 10 }}>
                 <button
                   style={{
-                    fontSize: "0.8em",
+                    fontSize: "0.9em",
                     background: "transparent",
                     color: "#e7c7f2",
                     border: "1px solid rgba(231, 199, 242, 0.4)",
                     borderRadius: 4,
-                    padding: "0.25em 0.7em",
-                    minWidth: 68,
+                    padding: "0.4em 0.9em",
+                    minWidth: 86,
                     cursor: "pointer",
                     textAlign: "center",
                   }}
@@ -295,13 +280,13 @@ export default function ChartCard({
                 </button>
                 <button
                   style={{
-                    fontSize: "0.8em",
+                    fontSize: "0.9em",
                     background: "rgba(255, 126, 196, 0.18)",
                     color: "#ffd9ef",
                     border: "1px solid rgba(255, 126, 196, 0.55)",
                     borderRadius: 4,
-                    padding: "0.25em 0.7em",
-                    minWidth: 68,
+                    padding: "0.4em 0.9em",
+                    minWidth: 86,
                     cursor: "pointer",
                     textAlign: "center",
                   }}
