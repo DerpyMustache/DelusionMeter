@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import INITIAL_CHARTS from "./lib/initialCharts.js";
-import VALUE_MAPS from "./lib/valueMaps.js";
 import sharedConstants from "../shared/profile_constants.json";
 const SPLASH_SEEN_KEY = "delusionmeter:splashSeen:v1";
 
@@ -74,7 +73,6 @@ export default function App() {
   const [showConfettiBurst, setShowConfettiBurst] = useState(false);
   const [confettiBurstId, setConfettiBurstId] = useState(0);
   const [openFilterEditorAttr, setOpenFilterEditorAttr] = useState(null);
-  const [animatedFilteredCount, setAnimatedFilteredCount] = useState(0);
   const [typeDescription, setTypeDescription] = useState("everyone");
   const requestIdRef = useRef(0);
   const prevDelusionPctRef = useRef(0);
@@ -98,7 +96,7 @@ export default function App() {
     []
   );
 
-  function handleFilterChange(nextFilter) {
+  const handleFilterChange = useCallback((nextFilter) => {
     const cleaned = normalizeFilterObject(nextFilter);
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -110,7 +108,11 @@ export default function App() {
       setError(null);
     }
     setFilter(cleaned);
-  }
+  }, []);
+
+  const handleFilterEditorToggle = useCallback((attribute, nextOpen) => {
+    setOpenFilterEditorAttr(nextOpen ? attribute : null);
+  }, []);
 
   useEffect(() => {
     if (!showSplash) return undefined;
@@ -201,8 +203,8 @@ export default function App() {
       options[chart.attribute] = [...(chart.labels || [])];
     }
 
-    if (VALUE_MAPS?.religion) {
-      options.religion = Object.values(VALUE_MAPS.religion);
+    if (sharedConstants.VALUE_MAPS?.religion) {
+      options.religion = Object.values(sharedConstants.VALUE_MAPS.religion);
     }
 
     return options;
@@ -224,25 +226,6 @@ export default function App() {
       });
   }, [baseCharts, filter]);
 
-  useEffect(() => {
-    if (!isRefreshing) return undefined;
-
-    const lowerBound = 1;
-    const upperBound = Math.max(lowerBound + 1, defaultTotalCount);
-    const nextRandomCount = () => {
-      const value = Math.floor(Math.random() * (upperBound - lowerBound + 1)) + lowerBound;
-      setAnimatedFilteredCount(value);
-    };
-
-    const kickoffId = window.setTimeout(nextRandomCount, 0);
-    const intervalId = window.setInterval(nextRandomCount, 70);
-
-    return () => {
-      window.clearTimeout(kickoffId);
-      window.clearInterval(intervalId);
-    };
-  }, [isRefreshing, defaultTotalCount]);
-
   const delusionPct = showLoadedFilteredData && Number.isFinite(summary?.delusionPct) ? summary.delusionPct : 0;
   const clampedDelusionPct = Math.max(0, Math.min(100, delusionPct));
   const shouldGlowShareButton = clampedDelusionPct >= 99 && !showShareMenu;
@@ -253,7 +236,6 @@ export default function App() {
       ? summary.filteredCount
       : 0
     : defaultTotalCount;
-  const displayedFilteredCount = isRefreshing ? animatedFilteredCount : filteredCount;
   const shareText = useMemo(() => {
     return `My type is ${typeDescription} which makes me ${delusionPct.toFixed(1)}% delusional. Are you more delusional than me?`;
   }, [typeDescription, delusionPct]);
@@ -399,7 +381,9 @@ export default function App() {
         <FilterPanel
           filter={filter}
           onFilterChange={handleFilterChange}
-          filteredCount={displayedFilteredCount}
+          filteredCount={filteredCount}
+          isRefreshing={isRefreshing}
+          totalCount={defaultTotalCount}
           attributeOptions={filterOptionsByAttribute}
           onTypeDescriptionChange={setTypeDescription}
         />
@@ -602,7 +586,7 @@ export default function App() {
               filter={filter}
               onFilterChange={handleFilterChange}
               isFilterEditorOpen={openFilterEditorAttr === c.attribute}
-              onToggleFilterEditor={(nextOpen) => setOpenFilterEditorAttr(nextOpen ? c.attribute : null)}
+              onToggleFilterEditor={handleFilterEditorToggle}
               canFilter
             />
           ))}

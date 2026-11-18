@@ -71,10 +71,10 @@ const ZODIAC_COLORS = {
 };
 
 const POLITICS_COLORS = {
-  liberal: "#3b82f6",
-  conservative: "#ef4444",
-  moderate: "#a855f7",
-  apolitical: "#9ca3af",
+  Liberal: "#3b82f6",
+  Conservative: "#ef4444",
+  Moderate: "#a855f7",
+  Apolitical: "#9ca3af",
 };
 
 const GENDER_COLORS = {
@@ -101,44 +101,20 @@ const RELIGION_COLORS = {
   Zoroastrian: "#3b82f6", 
 };
 
+const ATTRIBUTE_COLORS = {
+  looking_for: LOOKING_FOR_COLORS,
+  smoking: SMOKING_COLORS,
+  cannabis: CANNABIS_COLORS,
+  exercise: EXERCISE_COLORS,
+  location: LOCATION_COLORS,
+  star_sign: ZODIAC_COLORS,
+  politics: POLITICS_COLORS,
+  gender: GENDER_COLORS,
+  religion: RELIGION_COLORS,
+};
+
 function getMappedColor(label, attribute = null) {
-  if (attribute === "star_sign" && ZODIAC_COLORS[label]) {
-    return ZODIAC_COLORS[label];
-  }
-
-  if (attribute === "politics" && POLITICS_COLORS[label?.toLowerCase()]) {
-    return POLITICS_COLORS[label.toLowerCase()];
-  }
-
-  if (attribute === "gender" && GENDER_COLORS[label]) {
-    return GENDER_COLORS[label];
-  }
-
-  if (attribute === "smoking" && SMOKING_COLORS[label]) {
-    return SMOKING_COLORS[label];
-  }
-
-  if (attribute === "cannabis" && CANNABIS_COLORS[label]) {
-    return CANNABIS_COLORS[label];
-  }
-
-  if (attribute === "exercise" && EXERCISE_COLORS[label]) {
-    return EXERCISE_COLORS[label];
-  }
-
-  if (attribute === "location" && LOCATION_COLORS[label]) {
-    return LOCATION_COLORS[label];
-  }
-
-  if (attribute === "looking_for" && LOOKING_FOR_COLORS[label]) {
-    return LOOKING_FOR_COLORS[label];
-  }
-
-  if (attribute === "religion" && RELIGION_COLORS[label]) {
-    return RELIGION_COLORS[label];
-  }
-
-  return null;
+  return ATTRIBUTE_COLORS[attribute]?.[label] ?? null;
 }
 
 // Produces visually separated colors within a single chart.

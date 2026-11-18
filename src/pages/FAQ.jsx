@@ -8,12 +8,8 @@ const faqs = [
     a: "All of the options are just the choices Bumble gives you when setting up your profile."
   },
   {
-    q: "How are word clouds generated?",
-    a: "Word clouds are based on the most common words in prompt answers."
-  },
-  {
     q: "Why are some of the word clouds so small?",
-    a: "This was pretty confusing to me as well at first, but after checking the raw data, these prompts somehow only have a few (usually less than 10) responses out of the 500000+ profiles. Talk about unpopular."
+    a: "This was pretty confusing to me as well at first, but after checking the raw data, these prompts somehow only have a few responses out of the 500000+ profiles. Talk about unpopular. I did remove the ones with too little responses to actually see anything interesting."
   },
   {
     q: "Why is the number of profiles different for each attribute?",
@@ -22,6 +18,10 @@ const faqs = [
   {
     q: "Where is the sexuality option?",
     a: "For whatever reason Bumble doesn't have an actual sexuality option. You simply choose between men, women, and nonbinary people as to who you're looking to date. These selections were not available in the data, so if you're a woman filtering by men, it includes gay men as well. So rest easy knowing whatever your delusion percentage is, it's actually higher."
+  },
+  {
+    q: "How accurate is this data?",
+    a: "I probably wouldn't apply it to the general population, but in terms of Bumble users, it should be quite accurate to the profiles you will find on there. Obviously people can lie in their profiles, but I have no way to discern that. The data is also less accurate for locations that have a smaller sample size. I had to constantly change my location with the passport feature to try and collect data from as many places as possible, so I did my best."
   }
 ];
 

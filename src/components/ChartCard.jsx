@@ -5,7 +5,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { colorsForLabels } from "../lib/colors.js";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -16,7 +16,7 @@ ChartJS.defaults.plugins.legend.labels.color = "#ffe9fa";
 
 const centerTextPlugin = {
   id: "centerText",
-  afterDraw(chart, args, options) {
+  afterDatasetsDraw(chart, args, options) {
     const meta = chart.getDatasetMeta(0);
     if (!meta || !meta.data || !meta.data.length) return;
 
@@ -39,7 +39,7 @@ const centerTextPlugin = {
   },
 };
 
-export default function ChartCard({
+function ChartCard({
   attribute,
   title,
   answeredCount,
@@ -124,6 +124,7 @@ export default function ChartCard({
         },
       },
       tooltip: {
+        backgroundColor: "#000000",
         callbacks: {
           label: (ctx) => {
             const v = ctx.raw;
@@ -171,7 +172,7 @@ export default function ChartCard({
       currentSorted.length === nextSorted.length &&
       currentSorted.every((v, i) => v === nextSorted[i]);
 
-    onToggleFilterEditor?.(false);
+    onToggleFilterEditor?.(attribute, false);
     if (unchanged) return;
 
     const nextFilter = { ...filter };
@@ -203,7 +204,7 @@ export default function ChartCard({
               onClick={() => {
                 setPendingValues(selectedValues);
                 setSelectionError("");
-                onToggleFilterEditor?.(!showDropdown);
+                onToggleFilterEditor?.(attribute, !showDropdown);
               }}
             >
               {selectedValues.length > 0 ? `Edit filter (${selectedValues.length})` : "Filter by"}
@@ -273,7 +274,7 @@ export default function ChartCard({
                   onClick={() => {
                     setPendingValues(selectedValues);
                     setSelectionError("");
-                    onToggleFilterEditor?.(false);
+                    onToggleFilterEditor?.(attribute, false);
                   }}
                 >
                   Cancel
@@ -306,3 +307,5 @@ export default function ChartCard({
     </div>
   );
 }
+
+export default memo(ChartCard);

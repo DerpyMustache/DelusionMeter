@@ -1,65 +1,72 @@
 
 import { useEffect, useMemo, useState } from "react";
-import { prettifyAttributeName } from "../lib/transform.js";
+import sharedConstants from "../../shared/profile_constants.json";
 
 const CHIP_TUTORIAL_SEEN_KEY = "delusionmeter:chipEditHintSeen:v1";
 const CHIP_TUTORIAL_DELAY_MS = 2200;
-const CHIP_TUTORIAL_FLASH_MS = 950;
 const FILTER_PRIORITY_ORDER = ["height", "age", "gender", "politics", "star_sign"];
+const TUTORIAL_CANNABIS_OPTIONS = ["Never", "Socially", "Frequently"];
+const DISPLAY_NAME_MAP = sharedConstants.DISPLAY_NAME_MAP || {};
+
+function prettifyAttributeName(attr) {
+  if (DISPLAY_NAME_MAP[attr]) return DISPLAY_NAME_MAP[attr];
+  const label = attr.replace(/_/g, " ");
+  return label ? label.charAt(0).toUpperCase() + label.slice(1) : label;
+}
 
 function religionToNoun(value) {
-  const normalized = String(value).trim().toLowerCase();
+  const normalized = String(value).trim();
   switch (normalized) {
-    case "agnostic":
+    case "Agnostic":
       return "agnostics";
-    case "atheist":
+    case "Atheist":
       return "atheists";
-    case "buddhist":
+    case "Buddhist":
       return "buddhists";
-    case "catholic":
+    case "Catholic":
       return "catholics";
-    case "christian":
+    case "Christian":
       return "christians";
-    case "hindu":
+    case "Hindu":
       return "hindus";
-    case "jain":
+    case "Jain":
       return "jains";
-    case "jewish":
+    case "Jewish":
       return "jewish people";
-    case "latter-day saint":
+    case "Latter-day Saint":
       return "latter-day saints";
-    case "mormon":
+    case "Mormon":
       return "mormons";
-    case "muslim":
+    case "Muslim":
       return "muslims";
-    case "other":
+    case "Other":
       return "people of other religions";
-    case "sikh":
+    case "Sikh":
       return "sikhs";
-    case "spiritual":
+    case "Spiritual":
       return "spiritual people";
-    case "zoroastrian":
+    case "Zoroastrian":
       return "zoroastrians";
     default:
-      return `${normalized} people`;
+      return `${normalized.toLowerCase()} people`;
   }
 }
 
 function politicsToNoun(value) {
-  const normalized = String(value).trim().toLowerCase();
+  const normalized = String(value).trim();
   switch (normalized) {
-    case "conservative":
+    case "Conservative":
       return "conservatives";
-    case "liberal":
+    case "Liberal":
       return "liberals";
-    case "moderate":
+    case "Moderate":
       return "moderates";
-    case "apolitical":
+    case "Apolitical":
       return "apolitical people";
-    case "other":
+    case "Other":
       return "people with other political views";
     default:
-      return `${normalized} people`;
+      return `${normalized.toLowerCase()} people`;
   }
 }
 
@@ -73,10 +80,7 @@ function normalizeValues(raw) {
 }
 
 function normalizeLowerWithNever(values) {
-  return values.map((value) => {
-    const normalized = String(value).trim().toLowerCase();
-    return normalized === "never" ? "never" : normalized;
-  });
+  return values.map((value) => String(value).trim().toLowerCase());
 }
 
 function isSingleNever(values) {
@@ -473,18 +477,40 @@ function buildSentenceParts(sorted) {
 }
 
 
-export default function FilterPanel({ filter, onFilterChange, filteredCount = 0, attributeOptions = {}, onTypeDescriptionChange }) {
+export default function FilterPanel({ filter, onFilterChange, filteredCount = 0, isRefreshing = false, totalCount = 0, attributeOptions = {}, onTypeDescriptionChange }) {
   const [editingAttr, setEditingAttr] = useState(null);
   const [pendingValues, setPendingValues] = useState([]);
   const [selectionError, setSelectionError] = useState("");
+  const [animatedFilteredCount, setAnimatedFilteredCount] = useState(0);
   const [editorPosition, setEditorPosition] = useState({ top: 0, left: 0 });
   const [editorIsCentered, setEditorIsCentered] = useState(false);
   const [chipTutorialVisible, setChipTutorialVisible] = useState(false);
-  const [, setChipTutorialFlashOn] = useState(true);
+  const [tutorialDemoValues, setTutorialDemoValues] = useState(["Socially"]);
+  const [tutorialDemoPendingValues, setTutorialDemoPendingValues] = useState(["Socially"]);
+  const [tutorialDemoOpen, setTutorialDemoOpen] = useState(false);
+  const [tutorialDemoError, setTutorialDemoError] = useState("");
   const [chipTutorialSeen, setChipTutorialSeen] = useState(() => {
     if (typeof window === "undefined") return true;
     return window.localStorage.getItem(CHIP_TUTORIAL_SEEN_KEY) === "1";
   });
+
+  useEffect(() => {
+    if (!isRefreshing) return undefined;
+
+    const upperBound = Math.max(2, totalCount);
+    const updateCount = () => {
+      setAnimatedFilteredCount(Math.floor(Math.random() * upperBound) + 1);
+    };
+    const kickoffId = window.setTimeout(updateCount, 0);
+    const intervalId = window.setInterval(updateCount, 70);
+
+    return () => {
+      window.clearTimeout(kickoffId);
+      window.clearInterval(intervalId);
+    };
+  }, [isRefreshing, totalCount]);
+
+  const displayFilteredCount = isRefreshing ? animatedFilteredCount : filteredCount;
 
   // Build the improved, natural sentence
   const filterEntries = useMemo(
@@ -505,18 +531,6 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
     return () => window.clearTimeout(timeoutId);
   }, [showChipTutorial, chipTutorialVisible]);
 
-  useEffect(() => {
-    if (!(showChipTutorial && chipTutorialVisible)) {
-      return undefined;
-    }
-
-    const intervalId = window.setInterval(() => {
-      setChipTutorialFlashOn((v) => !v);
-    }, CHIP_TUTORIAL_FLASH_MS);
-
-    return () => window.clearInterval(intervalId);
-  }, [showChipTutorial, chipTutorialVisible]);
-
   const markChipTutorialSeen = () => {
     if (chipTutorialSeen) return;
     setChipTutorialSeen(true);
@@ -524,6 +538,25 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
     if (typeof window !== "undefined") {
       window.localStorage.setItem(CHIP_TUTORIAL_SEEN_KEY, "1");
     }
+  };
+
+  const toggleTutorialDemoValue = (value) => {
+    setTutorialDemoPendingValues((current) => (
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value]
+    ));
+    setTutorialDemoError("");
+  };
+
+  const applyTutorialDemoSelection = () => {
+    if (tutorialDemoPendingValues.length === TUTORIAL_CANNABIS_OPTIONS.length) {
+      setTutorialDemoError("Try removing at least one option.");
+      return;
+    }
+    setTutorialDemoValues([...tutorialDemoPendingValues]);
+    setTutorialDemoOpen(false);
+    setTutorialDemoError("");
   };
 
   // Order: height, age, gender, politics, star_sign, then the rest
@@ -561,9 +594,9 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
 
   let sentence = "";
   if (filterEntries.length === 0) {
-    sentence = `Showing all ${filteredCount} profiles`;
+    sentence = `Showing all ${displayFilteredCount} profiles`;
   } else {
-    sentence = `Showing ${filteredCount} profiles from`;
+    sentence = `Showing ${displayFilteredCount} profiles from`;
     if (!nounPart) {
       if (ageSelected && ageAdjectiveIndex !== -1) {
         adjectiveParts[ageAdjectiveIndex] = { attr: "age", text: `${ageValueText} year olds` };
@@ -744,7 +777,7 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
             <div style={{ fontSize: "clamp(0.88rem, 1.5vw, 1rem)", color: "var(--text-muted)", lineHeight: 1.55, marginBottom: "1rem" }}>
               The highlighted words in your summary are clickable. For example:
             </div>
-            {/* Example filter sentence with a mock chip */}
+            {/* Interactive example mirrors the real filter-chip editor without changing dashboard filters. */}
             <div style={{
               background: "rgba(41, 15, 62, 0.65)",
               border: "1px solid rgba(255, 184, 232, 0.22)",
@@ -756,31 +789,86 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
               textAlign: "left",
               lineHeight: 1.6,
             }}>
-              {"Showing 12,450 profiles from people who use "}
-              <span style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.3rem",
-                color: "#ffd3ef",
-                background: "rgba(255, 126, 196, 0.22)",
-                border: "1px solid rgba(255, 184, 232, 0.55)",
-                borderRadius: 6,
-                padding: "0.12rem 0.42rem",
-                fontWeight: 700,
-                cursor: "default",
-              }}>
-                cannabis socially
-              </span>
-              <span style={{
-                display: "inline-block",
-                marginLeft: "0.4rem",
-                fontSize: "0.82em",
-                color: "#ff9cd3",
-                fontStyle: "italic",
-              }}>
-                ← tap to change this 
-              </span>
+              {tutorialDemoValues.length > 0 ? (
+                <>
+                  {"Example: people who use "}
+                  <button
+                    type="button"
+                    aria-expanded={tutorialDemoOpen}
+                    onClick={() => {
+                      setTutorialDemoPendingValues([...tutorialDemoValues]);
+                      setTutorialDemoError("");
+                      setTutorialDemoOpen((open) => !open);
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.3rem",
+                      color: "#ffd3ef",
+                      background: "rgba(255, 126, 196, 0.22)",
+                      border: "1px solid rgba(255, 184, 232, 0.55)",
+                      borderRadius: 6,
+                      padding: "0.12rem 0.42rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    cannabis {joinWithOr(tutorialDemoValues.map((value) => value.toLowerCase()))}
+                  </button>
+                  <span style={{
+                    display: "inline-block",
+                    marginLeft: "0.4rem",
+                    fontSize: "0.82em",
+                    color: "#ff9cd3",
+                    fontStyle: "italic",
+                  }}>
+                    click to edit
+                  </span>
+                </>
+              ) : (
+                "Example: all profiles, with no cannabis filter"
+              )}
             </div>
+            {tutorialDemoOpen && (
+              <div
+                role="group"
+                aria-label="Example cannabis filter"
+                onClick={(event) => event.stopPropagation()}
+                style={{ textAlign: "left", margin: "-0.65rem 0 1rem", padding: "0.25rem 0.9rem 0.75rem" }}
+              >
+                {TUTORIAL_CANNABIS_OPTIONS.map((value) => (
+                  <label key={value} style={{ display: "flex", alignItems: "center", gap: 8, padding: "0.3rem 0", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={tutorialDemoPendingValues.includes(value)}
+                      onChange={() => toggleTutorialDemoValue(value)}
+                    />
+                    {value}
+                  </label>
+                ))}
+                {tutorialDemoError && (
+                  <div role="alert" style={{ color: "#ffcde2", fontSize: "0.82em", marginTop: 4 }}>
+                    {tutorialDemoError}
+                  </div>
+                )}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setTutorialDemoOpen(false)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={applyTutorialDemoSelection}
+                    style={{ cursor: "pointer" }}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
             <button
               onClick={markChipTutorialSeen}
               style={{
@@ -837,7 +925,7 @@ export default function FilterPanel({ filter, onFilterChange, filteredCount = 0,
             sentence
           ) : (
             <>
-              {`Showing ${filteredCount} profiles from `}
+              {`Showing ${displayFilteredCount} profiles from `}
               {adjectiveParts.map((part, idx) => (
                 <span key={`adj-${idx}`}>
                   {idx > 0 ? " " : ""}

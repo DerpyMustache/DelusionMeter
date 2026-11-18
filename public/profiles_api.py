@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import json
 import re
+from array import array
 
 app = Flask(__name__)
 
@@ -69,10 +70,10 @@ def get_db_client():
     global _mongo_client
     if _mongo_client is not None:
         return _mongo_client
-    mongo_uri = os.environ.get("MONGODB_URI")
+    mongo_uri = os.environ.get("MONGODB_TARGET_URI")
     if not mongo_uri:
         raise RuntimeError(
-            "Missing MONGODB_URI environment variable. "
+            "Missing MONGODB_TARGET_URI environment variable. "
             "Set it in your shell or profiles-dashboard/.env."
         )
     print("Connecting to MongoDB")
@@ -81,8 +82,11 @@ def get_db_client():
 
 
 _profiles_cache = None
-_decoded_profiles_cache = None
 _chart_label_schema_cache = None
+_answered_count_rows = None
+_answered_counts = {}
+_filter_index_rows = None
+_filter_indexes = {}
 
 def load_shared_constants():
     constants_path = Path(__file__).resolve().parent.parent / "shared" / "profile_constants.json"
@@ -92,10 +96,8 @@ def load_shared_constants():
 
 
 SHARED_CONSTANTS = load_shared_constants()
-ATTRIBUTE_MAP = SHARED_CONSTANTS["ATTRIBUTE_MAP"]
-FIXED_HEADERS = list(ATTRIBUTE_MAP.values())
+FIXED_HEADERS = list(SHARED_CONSTANTS["FILTER_KEYS"])
 ALLOWED_FILTER_KEYS = set(SHARED_CONSTANTS.get("FILTER_KEYS", FIXED_HEADERS))
-VALUE_MAPS = SHARED_CONSTANTS["VALUE_MAPS"]
 IGNORE_FIELDS = set(SHARED_CONSTANTS["IGNORE_FIELDS"])
 MIN_SLICE_PCT = float(SHARED_CONSTANTS["MIN_SLICE_PCT"])
 DISPLAY_NAME_MAP = SHARED_CONSTANTS["DISPLAY_NAME_MAP"]
@@ -125,7 +127,7 @@ def get_profiles_cached():
         print("Serving profiles from cache")
         return _profiles_cache
     client = get_db_client()
-    db_name = os.environ.get("MONGODB_DB", "Profiles")
+    db_name = os.environ.get("MONGODB_CLEAN_DB", "Profiles_cleaned")
     collection_name = os.environ.get("MONGODB_COLLECTION", "Profiles")
     db = client[db_name]
     collection = db[collection_name]
@@ -133,44 +135,6 @@ def get_profiles_cached():
     _profiles_cache = list(collection.find({}, {'_id': False}))
     print(f"Cached {len(_profiles_cache)} profiles")
     return _profiles_cache
-
-
-def map_value(attr, value):
-    value_map = VALUE_MAPS.get(attr)
-    if not value_map:
-        return value
-
-    def iter_lookup_keys(raw):
-        seen = set()
-
-        def push(k):
-            marker = f"{type(k).__name__}:{k}"
-            if marker in seen:
-                return
-            seen.add(marker)
-            yield k
-
-        try:
-            hash(raw)
-            yield from push(raw)
-        except TypeError:
-            pass
-
-        sraw = str(raw)
-        yield from push(sraw)
-
-        try:
-            iraw = int(raw)
-            yield from push(iraw)
-            yield from push(str(iraw))
-        except Exception:
-            pass
-
-    for key in iter_lookup_keys(value):
-        if key in value_map:
-            return value_map[key]
-
-    return value
 
 
 def normalize_scalar(value):
@@ -202,60 +166,27 @@ def normalize_filter_payload(incoming_filters):
 
 
 def count_non_blank(rows, attr):
-    return sum(1 for row in rows if normalize_scalar(row.get(attr)))
+    field = 'height_inches' if attr == 'height' else attr
+
+    def has_value(row):
+        value = row.get(field)
+        return value is not None and value != ""
+
+    global _answered_count_rows
+    if rows is _profiles_cache:
+        if _answered_count_rows is not rows:
+            _answered_counts.clear()
+            _answered_count_rows = rows
+        if attr not in _answered_counts:
+            _answered_counts[attr] = sum(1 for row in rows if has_value(row))
+        return _answered_counts[attr]
+    return sum(1 for row in rows if has_value(row))
 
 
-def values_match(attr, row_value, selected_value):
+def values_match(row_value, selected_value):
     selected = normalize_scalar(selected_value)
-    if not selected:
-        return False
-
-    # Compare both raw and mapped forms to avoid false negatives when data contains coded values.
-    candidates = [
-        row_value,
-        map_value(attr, row_value),
-    ]
-
-    for candidate in candidates:
-        c = normalize_scalar(candidate)
-        if not c:
-            continue
-        if c == selected:
-            return True
-        if c.lower() == selected.lower():
-            return True
-
-    return False
-
-
-def decode_profiles_cached():
-    global _decoded_profiles_cache
-    if _decoded_profiles_cache is not None:
-        return _decoded_profiles_cache
-
-    decoded_profiles = []
-    for profile in get_profiles_cached():
-        decoded = {}
-        for key, raw_value in profile.items():
-            attr = ATTRIBUTE_MAP.get(str(key), str(key))
-            decoded[attr] = map_value(attr, raw_value)
-        decoded_profiles.append(decoded)
-
-    _decoded_profiles_cache = decoded_profiles
-    return _decoded_profiles_cache
-
-
-def bucket_age(age_value):
-    try:
-        n = int(str(age_value).strip())
-    except Exception:
-        return None
-
-    if n < 21:
-        return "<21"
-    start = 21 + ((n - 21) // 5) * 5
-    end = start + 4
-    return f"{start}-{end}"
+    stored = normalize_scalar(row_value)
+    return bool(selected and stored and stored.lower() == selected.lower())
 
 
 def parse_age_bucket_start(label):
@@ -267,59 +198,11 @@ def parse_age_bucket_start(label):
     return int(m.group(1)) if m else float("inf")
 
 
-def parse_height_to_inches(value):
-    v = str(value).lower()
-
-    # Support plain numeric forms:
-    # 1-49 => encoded values where 1 maps to 3'0", 49 maps to 7'0"
-    # 36-96 => already inches
-    # 120-260 => centimeters
-    plain_num = re.match(r"^\s*\d+(?:\.\d+)?\s*$", v)
-    if plain_num:
-        n = float(v.strip())
-        if 1 <= n <= 49:
-            return n + 35
-        if 36 <= n <= 96:
-            return n
-        if 120 <= n <= 260:
-            return n / 2.54
-
-    feet_inches = re.search(r"(\d+)\s*'\s*(\d+)?", v)
-    if feet_inches:
-        feet = int(feet_inches.group(1))
-        inches = int(feet_inches.group(2) or 0)
-        return feet * 12 + inches
-
-    ft = re.search(r"(\d+)\s*ft", v)
-    inch = re.search(r"(\d+)\s*in", v)
-    if ft:
-        feet = int(ft.group(1))
-        inches = int(inch.group(1)) if inch else 0
-        return feet * 12 + inches
-
-    cm = re.search(r"(\d+)\s*cm", v)
-    if cm:
-        return int(cm.group(1)) / 2.54
-
-    return None
-
-
 def format_inches(n):
     inches = round(n)
     ft = inches // 12
     inch = inches % 12
     return f"{ft}'{inch}\""
-
-
-def bucket_height(height_value):
-    inches = parse_height_to_inches(height_value)
-    if inches is None:
-        return None
-    if inches >= 76:
-        return ">6'3"
-    start = int(inches // 4) * 4
-    end = start + 3
-    return f"{format_inches(start)}-{format_inches(end)}"
 
 
 def parse_height_bucket_start(label):
@@ -395,35 +278,17 @@ def prettify_attribute_name(attr):
 
 
 def count_attribute_values(rows, attr):
-    is_age = attr == "age"
-    is_height = attr == "height"
+    field = {'age': 'age_bucket', 'height': 'height_bucket'}.get(attr, attr)
     counts = {}
     answered_count = 0
 
     for row in rows:
-        value = row.get(attr)
+        value = row.get(field)
         if value is None:
             continue
-
-        if attr == "gender":
-            raw = str(value).strip()
-            value = raw if raw else "Non-binary/Gender Nonconforming"
-        else:
-            value = str(value)
-            if not value.strip():
-                continue
-
-        if is_age:
-            b = bucket_age(value)
-            if b is None:
-                continue
-            value = b
-
-        if is_height:
-            b = bucket_height(value)
-            if b is None:
-                continue
-            value = b
+        value = str(value)
+        if not value.strip():
+            continue
 
         counts[value] = counts.get(value, 0) + 1
         answered_count += 1
@@ -513,12 +378,20 @@ def get_chart_label_schema_cached():
     if _chart_label_schema_cache is not None:
         return _chart_label_schema_cache
 
-    all_rows = decode_profiles_cached()
+    all_rows = get_profiles_cached()
     _chart_label_schema_cache = build_chart_label_schema(all_rows, FIXED_HEADERS)
     return _chart_label_schema_cache
 
 
 def build_attribute_charts(rows, headers, label_schema=None):
+    counts_by_attribute = {
+        attr: count_attribute_values(rows, attr)
+        for attr in headers if attr and attr not in IGNORE_FIELDS
+    }
+    return build_attribute_charts_from_counts(counts_by_attribute, headers, label_schema)
+
+
+def build_attribute_charts_from_counts(counts_by_attribute, headers, label_schema=None):
     charts = []
 
     for attr in headers:
@@ -528,7 +401,7 @@ def build_attribute_charts(rows, headers, label_schema=None):
         is_age = attr == "age"
         is_height = attr == "height"
 
-        counts, answered_count = count_attribute_values(rows, attr)
+        counts, answered_count = counts_by_attribute.get(attr, ({}, 0))
 
         if answered_count == 0:
             continue
@@ -599,7 +472,7 @@ def matches_age_filter(age_value, selected_label):
     except Exception:
         pass
 
-    return bucket_age(age_value) == label
+    return False
 
 
 def parse_feet_inches(text):
@@ -609,8 +482,7 @@ def parse_feet_inches(text):
     return int(m.group(1)) * 12 + int(m.group(2))
 
 
-def matches_height_filter(height_value, selected_label):
-    inches = parse_height_to_inches(height_value)
+def matches_height_inches_filter(inches, selected_label):
     if inches is None:
         return False
 
@@ -635,9 +507,49 @@ def matches_height_filter(height_value, selected_label):
     return exact is not None and round(inches) == exact
 
 
+def filter_index(rows, attr):
+    global _filter_index_rows
+    if _filter_index_rows is not rows:
+        _filter_indexes.clear()
+        _filter_index_rows = rows
+    if attr not in _filter_indexes:
+        index = {}
+        for position, row in enumerate(rows):
+            value = row.get('height_inches' if attr == 'height' else attr)
+            key = value if attr == 'height' else normalize_scalar(value)
+            index.setdefault(key, array('I')).append(position)
+        _filter_indexes[attr] = index
+    return _filter_indexes[attr]
+
+
+def indexed_filters(rows, filters):
+    matches = None
+    for attr, raw_values in filters.items():
+        values = normalize_filter_values(raw_values)
+        if not values:
+            continue
+        positions = set()
+        for value, indexed_positions in filter_index(rows, attr).items():
+            if attr == 'age':
+                matched = any(matches_age_filter(value, selected) for selected in values)
+            elif attr == 'height':
+                matched = any(matches_height_inches_filter(value, selected) for selected in values)
+            else:
+                matched = any(values_match(value, selected) for selected in values)
+            if matched:
+                positions.update(indexed_positions)
+        matches = positions if matches is None else matches.intersection(positions)
+        if not matches:
+            return []
+    return [rows[position] for position in sorted(matches)] if matches is not None else rows
+
+
 def apply_filters(rows, filters):
     if not filters:
         return rows
+
+    if rows is _profiles_cache:
+        return indexed_filters(rows, filters)
 
     def build_attr_predicate(attr, raw_val):
         values = tuple(normalize_filter_values(raw_val))
@@ -652,13 +564,12 @@ def apply_filters(rows, filters):
 
         if attr == "height":
             def predicate(row):
-                row_value = row.get(attr)
-                return any(matches_height_filter(row_value, val) for val in values)
+                return any(matches_height_inches_filter(row.get('height_inches'), val) for val in values)
             return predicate
 
         def predicate(row):
             row_value = row.get(attr)
-            return any(values_match(attr, row_value, val) for val in values)
+            return any(values_match(row_value, val) for val in values)
 
         return predicate
 
@@ -701,6 +612,16 @@ def compute_delusion_pct(all_rows, filtered_rows, filters):
     return min(99.9, max(0.0, raw_delusion))
 
 
+def calculate_summary(filters, all_rows, label_schema):
+    filtered_rows = apply_filters(all_rows, filters)
+    return {
+        'charts': build_attribute_charts(filtered_rows, FIXED_HEADERS, label_schema=label_schema),
+        'filteredCount': len(filtered_rows),
+        'totalCount': len(all_rows),
+        'delusionPct': compute_delusion_pct(all_rows, filtered_rows, filters),
+    }
+
+
 @app.route('/')
 def index():
     return jsonify({
@@ -722,17 +643,9 @@ def get_summary():
     incoming_filters = payload.get('filter') or payload.get('filters') or {}
     filters = normalize_filter_payload(incoming_filters)
 
-    all_rows = decode_profiles_cached()
-    filtered_rows = apply_filters(all_rows, filters)
+    all_rows = get_profiles_cached()
     label_schema = get_chart_label_schema_cached()
-    charts = build_attribute_charts(filtered_rows, FIXED_HEADERS, label_schema=label_schema)
-
-    return jsonify({
-        "charts": charts,
-        "filteredCount": len(filtered_rows),
-        "totalCount": len(all_rows),
-        "delusionPct": compute_delusion_pct(all_rows, filtered_rows, filters),
-    })
+    return jsonify(calculate_summary(filters, all_rows, label_schema))
 
 @app.route('/profiles')
 def get_profiles():
